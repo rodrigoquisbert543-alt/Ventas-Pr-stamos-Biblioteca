@@ -39,100 +39,6 @@ import {
 } from "./lib/supabase";
 import "./App.css";
 
-const initialProducts = [
-  {
-    id: "UNI-001",
-    name: "Polo institucional blanco",
-    category: "Uniformes",
-    price: 35,
-    stock: 42,
-    minStock: 10,
-    unit: "und.",
-  },
-  {
-    id: "UNI-002",
-    name: "Buzo institucional",
-    category: "Uniformes",
-    price: 75,
-    stock: 18,
-    minStock: 8,
-    unit: "und.",
-  },
-  {
-    id: "LIB-001",
-    name: "Agenda escolar 2026",
-    category: "Libros y útiles",
-    price: 18,
-    stock: 64,
-    minStock: 12,
-    unit: "und.",
-  },
-  {
-    id: "LIB-002",
-    name: "Cuaderno institucional A4",
-    category: "Libros y útiles",
-    price: 12,
-    stock: 87,
-    minStock: 20,
-    unit: "und.",
-  },
-  {
-    id: "COP-001",
-    name: "Fotocopia A4 B/N",
-    category: "Fotocopias",
-    price: 0.2,
-    stock: 999,
-    minStock: 100,
-    unit: "hoja",
-  },
-  {
-    id: "COP-002",
-    name: "Impresión a color A4",
-    category: "Fotocopias",
-    price: 1.5,
-    stock: 450,
-    minStock: 50,
-    unit: "hoja",
-  },
-];
-const initialMaterials = [
-  {
-    id: "MAT-001",
-    name: "Proyector Epson X49",
-    category: "Tecnología",
-    location: "Sala audiovisual",
-    status: "Prestado",
-    borrower: "María González",
-    due: "Hoy, 16:30",
-  },
-  {
-    id: "MAT-002",
-    name: "Parlante JBL EON",
-    category: "Audio",
-    location: "Depósito A",
-    status: "Disponible",
-    borrower: "",
-    due: "",
-  },
-  {
-    id: "MAT-003",
-    name: "Colección Ciencias 1°",
-    category: "Libros",
-    location: "Estante B-04",
-    status: "Disponible",
-    borrower: "",
-    due: "",
-  },
-];
-const initialTeachers = [
-  { id: "DOC-001", name: "María González", role: "Ciencias" },
-  { id: "DOC-002", name: "Carlos Ramírez", role: "Comunicación" },
-  { id: "DOC-003", name: "Ana Torres", role: "Matemática" },
-];
-const initialCustomers = [
-  { id: "CLI-001", name: "Familia Pérez", carnet: "1234567", phone: "" },
-  { id: "CLI-002", name: "Familia Quispe", carnet: "7654321", phone: "" },
-];
 const navItems = [
   ["Resumen", LayoutDashboard],
   ["Nueva venta", ShoppingCart],
@@ -151,9 +57,9 @@ function readStorage(key, fallback) {
   }
 }
 function readMaterials() {
-  const current = readStorage("colegio-materials", null);
-  const legacy = readStorage("biblioteca-materials", null);
-  return current?.length ? current : legacy?.length ? legacy : initialMaterials;
+  const current = readStorage("vida-verdad-materials", null);
+  const legacy = readStorage("vida-verdad-materials-v1", null);
+  return current?.length ? current : legacy?.length ? legacy : [];
 }
 function printElement(selector, kind = "receipt") {
   const element = document.querySelector(selector);
@@ -217,19 +123,19 @@ function ProductIcon({ category }) {
 
 function App() {
   const [products, setProducts] = useState(() =>
-    readStorage("colegio-products", initialProducts),
+    readStorage("vida-verdad-products", []),
   );
-  const [sales, setSales] = useState(() => readStorage("colegio-sales", []));
+  const [sales, setSales] = useState(() => readStorage("vida-verdad-sales", []));
   const [materials, setMaterials] = useState(readMaterials);
-  const [loans, setLoans] = useState(() => readStorage("colegio-loans", []));
+  const [loans, setLoans] = useState(() => readStorage("vida-verdad-loans", []));
   const [teachers, setTeachers] = useState(() =>
-    readStorage("colegio-teachers", initialTeachers),
+    readStorage("vida-verdad-teachers", []),
   );
   const [customers, setCustomers] = useState(() =>
-    readStorage("colegio-customers", initialCustomers),
+    readStorage("vida-verdad-customers", []),
   );
   const [cash, setCash] = useState(() =>
-    readStorage("colegio-cash", { opening: 250, movements: [] }),
+    readStorage("vida-verdad-cash", { opening: 0, movements: [] }),
   );
   const [activeNav, setActiveNav] = useState("Resumen");
   const [cart, setCart] = useState([]);
@@ -265,19 +171,19 @@ function App() {
     };
   }, []);
   useEffect(() => {
-    localStorage.setItem("colegio-products", JSON.stringify(products));
+    localStorage.setItem("vida-verdad-products", JSON.stringify(products));
   }, [products]);
   useEffect(() => {
-    localStorage.setItem("colegio-sales", JSON.stringify(sales));
+    localStorage.setItem("vida-verdad-sales", JSON.stringify(sales));
   }, [sales]);
   useEffect(() => {
-    localStorage.setItem("colegio-customers", JSON.stringify(customers));
+    localStorage.setItem("vida-verdad-customers", JSON.stringify(customers));
   }, [customers]);
   useEffect(() => {
-    localStorage.setItem("colegio-materials", JSON.stringify(materials));
-    localStorage.setItem("colegio-loans", JSON.stringify(loans));
-    localStorage.setItem("colegio-teachers", JSON.stringify(teachers));
-    localStorage.setItem("colegio-cash", JSON.stringify(cash));
+    localStorage.setItem("vida-verdad-materials", JSON.stringify(materials));
+    localStorage.setItem("vida-verdad-loans", JSON.stringify(loans));
+    localStorage.setItem("vida-verdad-teachers", JSON.stringify(teachers));
+    localStorage.setItem("vida-verdad-cash", JSON.stringify(cash));
   }, [materials, loans, teachers, cash]);
   useEffect(() => {
     loadCloudState()
@@ -928,14 +834,14 @@ function App() {
             <BookOpen size={20} />
           </span>
           <span>
-            Campus<span className="brand-dot">.</span>
+            Vida y Verdad<span className="brand-dot">.</span>
           </span>
         </div>
         <div className="workspace-switch">
           <span className="workspace-avatar">C</span>
           <span>
             <small>Institución</small>
-            <strong>Colegio San Miguel</strong>
+            <strong>Vida y Verdad Caranavi</strong>
           </span>
           <ChevronDown size={15} />
         </div>
@@ -987,7 +893,7 @@ function App() {
             <Menu size={20} />
           </button>
           <div className="breadcrumbs">
-            <span>Colegio San Miguel</span>
+            <span>Vida y Verdad Caranavi</span>
             <b>/</b>
             <strong>{activeNav}</strong>
           </div>
@@ -1007,7 +913,7 @@ function App() {
         <div className="page-content">
           <section className="welcome-row">
             <div>
-              <p className="eyebrow">OPERACIÓN ESCOLAR · TURNO MAÑANA</p>
+              <p className="eyebrow">GESTIÓN COMERCIAL · VIDA Y VERDAD CARANAVI</p>
               <h1>
                 {activeNav === "Nueva venta"
                   ? "Punto de venta"
@@ -1158,6 +1064,7 @@ function App() {
               customers={customers}
               sales={sales}
               onImport={(event) => importCsv(event, "customers")}
+              onAdd={() => setModal("customer")}
             />
           )}
           {activeNav === "Historial" && (
@@ -1923,18 +1830,24 @@ function InventoryView({
     </section>
   );
 }
-function CustomerView({ customers, sales, onImport }) {
+function CustomerView({ customers, sales, onImport, onAdd }) {
   return (
     <section className="panel lower-panel">
       <PanelHeader
         title="Clientes y familias"
         detail="Carnet, compras e importación masiva"
         action={
-          <label className="secondary-button file-button">
-            <Upload size={16} />
-            Importar CSV
-            <input type="file" accept=".csv,text/csv" onChange={onImport} />
-          </label>
+          <span className="button-pair">
+            <button className="primary-button small" type="button" onClick={onAdd}>
+              <Plus size={16} />
+              Nuevo cliente
+            </button>
+            <label className="secondary-button file-button">
+              <Upload size={16} />
+              Importar CSV
+              <input type="file" accept=".csv,text/csv" onChange={onImport} />
+            </label>
+          </span>
         }
       />
       <div className="inventory-table">
@@ -2439,7 +2352,7 @@ function ReceiptModal({ sale, onClose, onVoid }) {
             <BookOpen size={18} />
           </span>
           <span>
-            <strong>Colegio San Miguel</strong>
+            <strong>Vida y Verdad Caranavi</strong>
             <small>
               {isMovement
                 ? `Comprobante de ${sale.kind.toLowerCase()}`
