@@ -152,6 +152,7 @@ function App() {
   const [loanScan, setLoanScan] = useState(false);
   const scannerRef = useRef(null);
   const loanScanHandlerRef = useRef(null);
+  const lastScanRef = useRef({ value: "", time: 0 });
   const cloudReadyRef = useRef(!isSupabaseConfigured);
   const showToast = (message) => {
     setToast(message);
@@ -325,15 +326,34 @@ function App() {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 190, height: 190 } },
         (value) => {
+          const now = Date.now();
+          if (
+            lastScanRef.current.value === value &&
+            now - lastScanRef.current.time < 900
+          )
+            return;
+          lastScanRef.current = { value, time: now };
           setScanValue(value);
-          stopScanner();
-          if (loanScan) loanScanHandlerRef.current?.(value);
+          if (loanScan) {
+            stopScanner();
+            loanScanHandlerRef.current?.(value);
+            return;
+          }
+          const product = products.find(
+            (item) => item.id === value.trim().toUpperCase(),
+          );
+          if (product) {
+            addToCart(product);
+            setScanValue("");
+            return;
+          }
+          showToast("Código de producto no registrado");
         },
         () => {},
       )
       .catch(() => {});
     return () => stopScanner();
-  }, [modal, loanScan]);
+  }, [modal, loanScan, products]);
   const saleTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [cart],
@@ -499,7 +519,6 @@ function App() {
     );
     if (product) {
       addToCart(product);
-      setModal(null);
       setScanValue("");
       return;
     }
@@ -1135,8 +1154,12 @@ function App() {
             <div className="modal-icon">
               <QrCode size={22} />
             </div>
-            <h2>Escanear producto</h2>
-            <p>Apunta al QR o ingresa el código del producto.</p>
+            <h2>{loanScan ? "Registrar préstamo" : "Escanear productos"}</h2>
+            <p>
+              {loanScan
+                ? "Apunta al QR del material para registrar el préstamo."
+                : "Apunta al QR de cada producto; se añadirá al carrito automáticamente."}
+            </p>
             <div id="qr-reader" />
             <div className="scan-input">
               <QrCode size={17} />
