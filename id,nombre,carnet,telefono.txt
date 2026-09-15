@@ -1,0 +1,4 @@
+id,nombre,carnet,telefono
+CLI-001,Familia Pérez,1234567,70000000
+id,nombre,categoria,precio,stock,stock_minimo,unidad
+UNI-001,Polo institucional,Uniformes,35,42,10,und.
