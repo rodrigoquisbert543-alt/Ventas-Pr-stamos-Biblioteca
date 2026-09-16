@@ -136,6 +136,24 @@ function parseCsv(text) {
     ),
   );
 }
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+function downloadCsv(filename, headers, rows) {
+  const content = [headers, ...rows]
+    .map((row) => row.map(csvCell).join(","))
+    .join("\r\n");
+  const blob = new Blob(["\uFEFF" + content], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 function ProductIcon({ category }) {
   const Icon =
     category === "Uniformes"
@@ -790,6 +808,22 @@ function App() {
           .filter((item) => item.name);
         setCustomers((current) => [...current, ...imported]);
         showToast(`${imported.length} clientes importados`);
+      } else if (type === "materials") {
+        const imported = rows
+          .map((row, index) => ({
+            id:
+              row.id ||
+              `MAT-${String(materials.length + index + 1).padStart(3, "0")}`,
+            name: row.nombre || row.name || row.material || "",
+            category: row.categoria || row.category || "Otros",
+            location: row.ubicacion || row.location || "",
+            status: row.estado || row.status || "Disponible",
+            borrower: row.prestado_a || row.borrower || "",
+            due: row.devolucion || row.due || "",
+          }))
+          .filter((item) => item.name && item.location);
+        setMaterials((current) => [...current, ...imported]);
+        showToast(`${imported.length} materiales importados`);
       } else {
         const imported = rows
           .map((row, index) => ({
@@ -1376,6 +1410,36 @@ function App() {
             <SettingsView
               onImportProducts={(event) => importCsv(event, "products")}
               onImportCustomers={(event) => importCsv(event, "customers")}
+              onImportMaterials={(event) => importCsv(event, "materials")}
+              onExportProducts={() =>
+                downloadCsv(
+                  "productos.csv",
+                  ["id", "nombre", "categoria", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
+                  products.map((item) => [item.id, item.name, item.category, item.purchaseCost || 0, item.price, item.stock, item.minStock, item.unit]),
+                )
+              }
+              onExportCustomers={() =>
+                downloadCsv(
+                  "clientes.csv",
+                  ["id", "nombre", "carnet", "telefono", "familia", "parentesco"],
+                  customers.map((item) => [item.id, item.name, item.carnet, item.phone, item.family, item.relation]),
+                )
+              }
+              onExportMaterials={() =>
+                downloadCsv(
+                  "materiales.csv",
+                  ["id", "nombre", "categoria", "ubicacion", "estado", "prestado_a", "devolucion"],
+                  materials.map((item) => [item.id, item.name, item.category, item.location, item.status, item.borrower, item.due]),
+                )
+              }
+              onDownloadTemplate={(type) => {
+                const templates = {
+                  products: ["id", "nombre", "categoria", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
+                  customers: ["id", "nombre", "carnet", "telefono", "familia", "parentesco"],
+                  materials: ["id", "nombre", "categoria", "ubicacion", "estado", "prestado_a", "devolucion"],
+                };
+                downloadCsv(`${type}-plantilla.csv`, templates[type], [templates[type].map(() => "")]);
+              }}
               online={isSupabaseConfigured}
             />
           )}
@@ -2793,7 +2857,44 @@ function HistoryView({
     </section>
   );
 }
-function SettingsView({ onImportProducts, onImportCustomers, online }) {
+function CsvDataCard({
+  icon: Icon,
+  title,
+  description,
+  onImport,
+  onExport,
+  onTemplate,
+}) {
+  return (
+    <div className="import-card">
+      <Icon size={20} />
+      <h3>{title}</h3>
+      <p>{description}</p>
+      <div className="csv-actions">
+        <button className="secondary-button small" type="button" onClick={onTemplate}>
+          <Download size={15} /> Plantilla
+        </button>
+        <button className="secondary-button small" type="button" onClick={onExport}>
+          <Download size={15} /> Exportar actual
+        </button>
+        <label className="primary-button small file-button">
+          <Upload size={15} /> Importar CSV
+          <input type="file" accept=".csv,text/csv" onChange={onImport} />
+        </label>
+      </div>
+    </div>
+  );
+}
+function SettingsView({
+  onImportProducts,
+  onImportCustomers,
+  onImportMaterials,
+  onExportProducts,
+  onExportCustomers,
+  onExportMaterials,
+  onDownloadTemplate,
+  online,
+}) {
   return (
     <section className="panel lower-panel settings-view">
       <PanelHeader
@@ -2810,37 +2911,30 @@ function SettingsView({ onImportProducts, onImportCustomers, online }) {
         </small>
       </div>
       <div className="import-grid">
-        <div className="import-card">
-          <PackagePlus size={20} />
-          <h3>Importar productos</h3>
-          <p>
-            Columnas: id, nombre, categoria, precio, stock, stock_minimo,
-            unidad.
-          </p>
-          <label className="primary-button file-button">
-            <Upload size={16} />
-            Seleccionar CSV
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={onImportProducts}
-            />
-          </label>
-        </div>
-        <div className="import-card">
-          <UsersRound size={20} />
-          <h3>Importar clientes</h3>
-          <p>Columnas: id, nombre, carnet, telefono.</p>
-          <label className="primary-button file-button">
-            <Upload size={16} />
-            Seleccionar CSV
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={onImportCustomers}
-            />
-          </label>
-        </div>
+        <CsvDataCard
+          icon={PackagePlus}
+          title="Productos para la venta"
+          description="id, nombre, categoria, costo_de_compra, precio, stock, stock_minimo, unidad"
+          onImport={onImportProducts}
+          onExport={onExportProducts}
+          onTemplate={() => onDownloadTemplate("products")}
+        />
+        <CsvDataCard
+          icon={UsersRound}
+          title="Clientes"
+          description="id, nombre, carnet, telefono, familia, parentesco"
+          onImport={onImportCustomers}
+          onExport={onExportCustomers}
+          onTemplate={() => onDownloadTemplate("customers")}
+        />
+        <CsvDataCard
+          icon={ClipboardList}
+          title="Materiales prestables"
+          description="id, nombre, categoria, ubicacion, estado, prestado_a, devolucion"
+          onImport={onImportMaterials}
+          onExport={onExportMaterials}
+          onTemplate={() => onDownloadTemplate("materials")}
+        />
       </div>
     </section>
   );
