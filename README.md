@@ -17,6 +17,7 @@ Sin variables de Supabase la aplicación continúa funcionando con almacenamient
 npm install
 npm run dev
 ```
+La rama `master` es la rama de producción conectada a Vercel. Cada push a `master` genera automáticamente un despliegue de producción.
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
