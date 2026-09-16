@@ -62,6 +62,16 @@ function nextCustomerId(list) {
   }
   return id;
 }
+function nextPurchaseOrderId(list) {
+  const used = new Set(list.map((item) => item.id));
+  let index = list.length + 1;
+  let id = `PED-${String(index).padStart(4, "0")}`;
+  while (used.has(id)) {
+    index += 1;
+    id = `PED-${String(index).padStart(4, "0")}`;
+  }
+  return id;
+}
 function uniqueFamilies(customers) {
   return [
     ...new Set(
@@ -183,6 +193,9 @@ function App() {
   const [customers, setCustomers] = useState(() =>
     readStorage("vida-verdad-customers", []),
   );
+  const [purchaseOrders, setPurchaseOrders] = useState(() =>
+    readStorage("vida-verdad-purchase-orders", []),
+  );
   const [cash, setCash] = useState(() =>
     readStorage("vida-verdad-cash", { opening: 0, movements: [] }),
   );
@@ -201,6 +214,8 @@ function App() {
   const [selectedQr, setSelectedQr] = useState(null);
   const [selectedLoanMaterial, setSelectedLoanMaterial] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editingPurchaseOrder, setEditingPurchaseOrder] = useState(null);
+  const [printPurchaseOrder, setPrintPurchaseOrder] = useState(null);
   const [scanValue, setScanValue] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [loanScan, setLoanScan] = useState(false);
@@ -230,6 +245,7 @@ function App() {
       localStorage.setItem("vida-verdad-products", JSON.stringify(products));
       localStorage.setItem("vida-verdad-sales", JSON.stringify(sales));
       localStorage.setItem("vida-verdad-customers", JSON.stringify(customers));
+      localStorage.setItem("vida-verdad-purchase-orders", JSON.stringify(purchaseOrders));
       localStorage.setItem("vida-verdad-materials", JSON.stringify(materials));
       localStorage.setItem("vida-verdad-loans", JSON.stringify(loans));
       localStorage.setItem("vida-verdad-teachers", JSON.stringify(teachers));
@@ -237,7 +253,7 @@ function App() {
     };
     window.addEventListener("beforeunload", persistState);
     return () => window.removeEventListener("beforeunload", persistState);
-  }, [products, sales, customers, materials, loans, teachers, cash]);
+  }, [products, sales, customers, materials, loans, teachers, cash, purchaseOrders]);
   useEffect(() => {
     localStorage.setItem("vida-verdad-products", JSON.stringify(products));
   }, [products]);
@@ -247,6 +263,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem("vida-verdad-customers", JSON.stringify(customers));
   }, [customers]);
+  useEffect(() => {
+    localStorage.setItem("vida-verdad-purchase-orders", JSON.stringify(purchaseOrders));
+  }, [purchaseOrders]);
   useEffect(() => {
     localStorage.setItem("vida-verdad-materials", JSON.stringify(materials));
     localStorage.setItem("vida-verdad-loans", JSON.stringify(loans));
@@ -294,6 +313,14 @@ function App() {
           );
         if (cloud.teachers?.length) setTeachers(cloud.teachers);
         if (cloud.customers?.length) setCustomers(cloud.customers);
+        if (cloud.purchase_orders?.length)
+          setPurchaseOrders(
+            cloud.purchase_orders.map((order) => ({
+              ...order,
+              date: order.ordered_at || order.date,
+              receivedAt: order.received_at || order.receivedAt || "",
+            })),
+          );
         if (cloud.cash_movements?.length)
           setCash((current) => ({
             ...current,
@@ -324,9 +351,10 @@ function App() {
         loans,
         teachers,
         customers,
+        purchaseOrders,
         cash,
       }).catch(() => {});
-  }, [products, sales, materials, loans, teachers, customers, cash]);
+  }, [products, sales, materials, loans, teachers, customers, cash, purchaseOrders]);
   useEffect(() => {
     const openQr = (event) => setSelectedQr(event.detail);
     window.addEventListener("open-material-qr", openQr);
@@ -471,9 +499,9 @@ function App() {
           ? {
               ...item,
               quantity: Math.max(
-                1,
+                item.unit === "cm" || item.unit === "m" ? 0.01 : 1,
                 Math.min(
-                  Number(quantity) || 1,
+                  Number(quantity) || (item.unit === "cm" || item.unit === "m" ? 0.01 : 1),
                   products.find((product) => product.id === id)?.stock || 1,
                 ),
               ),
@@ -683,7 +711,7 @@ function App() {
       purchaseCost: Number(data.get("purchaseCost") || 0),
       stock: Number(data.get("stock")),
       minStock: 5,
-      unit: "und.",
+      unit: data.get("unit") || "und.",
     };
     setProducts((current) => [...current, product]);
     setModal(null);
@@ -718,6 +746,7 @@ function App() {
               category: data.get("category"),
               price: Number(data.get("price")),
               purchaseCost: Number(data.get("purchaseCost") || 0),
+              unit: data.get("unit") || product.unit || "und.",
               minStock: Number(data.get("minStock")),
             }
           : product,
@@ -732,7 +761,7 @@ function App() {
     const data = new FormData(event.currentTarget);
     const quantity = Number(data.get("quantity"));
     const operation = data.get("operation");
-    if (!quantity || quantity < 1)
+    if (!quantity || quantity <= 0)
       return showToast("Ingresa una cantidad válida");
     if (operation === "Salida" && quantity > editingProduct.stock)
       return showToast("La salida supera el stock disponible");
@@ -786,6 +815,107 @@ function App() {
         ? `${quantity} unidades retiradas del inventario`
         : `${quantity} unidades agregadas al stock`,
     );
+  };
+  const createPurchaseOrder = (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const items = JSON.parse(String(data.get("items") || "[]"));
+    const supplier = String(data.get("supplier") || "").trim();
+    if (!supplier || !items.length)
+      return showToast("Indica proveedor y al menos un producto");
+    const total = items.reduce(
+      (sum, item) => sum + item.quantity * item.unitCost,
+      0,
+    );
+    const paid = Math.min(Number(data.get("paid") || 0), total);
+    const order = {
+      id: nextPurchaseOrderId(purchaseOrders),
+      supplier,
+      notes: String(data.get("notes") || "").trim(),
+      items: items.map((item) => ({ ...item, received: 0 })),
+      total,
+      paid,
+      balance: total - paid,
+      status: "Pendiente",
+      date: new Date().toISOString(),
+    };
+    setPurchaseOrders((current) => [order, ...current]);
+    if (paid > 0) {
+      setCash((current) => ({
+        ...current,
+        movements: [
+          {
+            id: `M-${Date.now()}`,
+            type: "Egreso",
+            kind: "Egreso",
+            concept: `Adelanto pedido ${order.id} · ${supplier}`,
+            amount: paid,
+            cashAmount: paid,
+            qrAmount: 0,
+            payment: "Efectivo",
+            date: order.date,
+          },
+          ...current.movements,
+        ],
+      }));
+    }
+    setModal(null);
+    showToast(`Pedido ${order.id} registrado`);
+  };
+  const receivePurchaseOrder = (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const order = purchaseOrders.find((item) => item.id === data.get("orderId"));
+    if (!order) return showToast("Pedido no encontrado");
+    const received = order.items.map((item, index) => ({
+      ...item,
+      received: Math.min(
+        Math.max(Number(data.get(`received-${index}`) || 0), 0),
+        item.quantity,
+      ),
+    }));
+    const extraPayment = Math.max(Number(data.get("payment") || 0), 0);
+    const nextOrder = {
+      ...order,
+      items: received,
+      paid: Math.min(order.total, order.paid + extraPayment),
+      balance: Math.max(0, order.total - order.paid - extraPayment),
+      status: received.every((item) => item.received >= item.quantity)
+        ? "Completado"
+        : received.some((item) => item.received > 0)
+          ? "Recibido incompleto"
+          : order.status,
+      receivedAt: new Date().toISOString(),
+    };
+    setProducts((current) =>
+      current.map((product) => {
+        const line = received.find((item) => item.productId === product.id);
+        const previous = order.items.find((item) => item.productId === product.id)?.received || 0;
+        const added = (line?.received || 0) - previous;
+        return added > 0
+          ? { ...product, stock: product.stock + added, purchaseCost: line.unitCost }
+          : product;
+      }),
+    );
+    setPurchaseOrders((current) => current.map((item) => item.id === order.id ? nextOrder : item));
+    if (extraPayment > 0) {
+      setCash((current) => ({
+        ...current,
+        movements: [{
+          id: `M-${Date.now()}`,
+          type: "Egreso",
+          kind: "Egreso",
+          concept: `Pago pedido ${order.id} · ${order.supplier}`,
+          amount: extraPayment,
+          cashAmount: extraPayment,
+          qrAmount: 0,
+          payment: "Efectivo",
+          date: new Date().toISOString(),
+        }, ...current.movements],
+      }));
+    }
+    setModal(null);
+    showToast(`Recepción de ${order.id} registrada`);
   };
   const importCsv = (event, type) => {
     const file = event.target.files?.[0];
@@ -1341,6 +1471,7 @@ function App() {
               products={products}
               sales={sales}
               cash={cash}
+              purchaseOrders={purchaseOrders}
               search={search}
               setSearch={setSearch}
               onAdd={() => setModal("product")}
@@ -1353,6 +1484,12 @@ function App() {
                 setEditingProduct(product);
                 setModal("stock");
               }}
+              onNewOrder={() => setModal("purchaseOrder")}
+              onReceiveOrder={(order) => {
+                setEditingPurchaseOrder(order);
+                setModal("receiveOrder");
+              }}
+              onPrintOrder={setPrintPurchaseOrder}
             />
           )}
           {activeNav === "Clientes" && (
@@ -1518,7 +1655,17 @@ function App() {
                   <option>Uniformes</option>
                   <option>Libros y útiles</option>
                   <option>Fotocopias</option>
+                  <option>Tela</option>
                   <option>Otros</option>
+                </select>
+              </label>
+              <label>
+                Unidad de venta
+                <select name="unit" defaultValue="und.">
+                  <option value="und.">Unidad</option>
+                  <option value="cm">Centímetro lineal</option>
+                  <option value="m">Metro lineal</option>
+                  <option value="rollo">Rollo</option>
                 </select>
               </label>
               <div className="form-row">
@@ -1601,6 +1748,15 @@ function App() {
                   />
                 </label>
                 <label>
+                  Unidad de venta
+                  <select name="unit" defaultValue={editingProduct?.unit || "und."}>
+                    <option value="und.">Unidad</option>
+                    <option value="cm">Centímetro lineal</option>
+                    <option value="m">Metro lineal</option>
+                    <option value="rollo">Rollo</option>
+                  </select>
+                </label>
+                <label>
                   Stock mínimo
                   <input
                     required
@@ -1668,6 +1824,29 @@ function App() {
               </label>
             </>
           }
+        />
+      )}
+      {modal === "purchaseOrder" && (
+        <PurchaseOrderModal
+          products={products}
+          onSubmit={createPurchaseOrder}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === "receiveOrder" && editingPurchaseOrder && (
+        <ReceiveOrderModal
+          order={editingPurchaseOrder}
+          onSubmit={receivePurchaseOrder}
+          onClose={() => {
+            setEditingPurchaseOrder(null);
+            setModal(null);
+          }}
+        />
+      )}
+      {printPurchaseOrder && (
+        <PurchaseOrderPrint
+          order={printPurchaseOrder}
+          onClose={() => setPrintPurchaseOrder(null)}
         />
       )}
       {modal === "customer" && (
@@ -2102,7 +2281,8 @@ function SaleView({
                 <input
                   aria-label={`Cantidad de ${item.name}`}
                   type="number"
-                  min="1"
+                  min={item.unit === "cm" || item.unit === "m" ? "0.01" : "1"}
+                  step={item.unit === "cm" || item.unit === "m" ? "0.01" : "1"}
                   value={item.quantity}
                   onChange={(event) =>
                     updateQuantity(item.id, event.target.value)
@@ -2297,12 +2477,16 @@ function InventoryView({
   products,
   sales,
   cash,
+  purchaseOrders,
   search,
   setSearch,
   onAdd,
   onQr,
   onEdit,
   onStock,
+  onNewOrder,
+  onReceiveOrder,
+  onPrintOrder,
 }) {
   const [reportStart, setReportStart] = useState("");
   const [reportEnd, setReportEnd] = useState("");
@@ -2554,7 +2738,110 @@ function InventoryView({
           <span>Margen bruto estimado: <strong>{money(reportTotals.grossMarginValue)}</strong></span>
         </div>
       </section>
+      <section className="panel lower-panel purchase-orders">
+        <PanelHeader
+          title="Pedidos a proveedores"
+          detail="Control de pedidos, entregas parciales y pagos"
+          action={
+            <button className="primary-button small" type="button" onClick={onNewOrder}>
+              <Plus size={15} /> Nuevo pedido
+            </button>
+          }
+        />
+        {purchaseOrders.length ? purchaseOrders.map((order) => (
+          <div className="purchase-order-row" key={order.id}>
+            <span>
+              <strong>{order.id} · {order.supplier}</strong>
+              <small>
+                {order.status} · {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos · Saldo {money(order.balance)}
+              </small>
+            </span>
+            <b>{money(order.total)}</b>
+            <button className="secondary-button small" type="button" onClick={() => onReceiveOrder(order)}>
+              Registrar recepción
+            </button>
+            <button className="icon-action" type="button" title="Imprimir orden" onClick={() => onPrintOrder(order)}>
+              <FileText size={15} />
+            </button>
+          </div>
+        )) : (
+          <div className="empty-state"><ClipboardList size={26} /><p>No hay pedidos registrados.</p></div>
+        )}
+      </section>
     </section>
+  );
+}
+
+function PurchaseOrderModal({ products, onSubmit, onClose }) {
+  const [lines, setLines] = useState([{ productId: products[0]?.id || "", quantity: 1, unitCost: products[0]?.purchaseCost || 0 }]);
+  const updateLine = (index, field, value) => setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: field === "productId" ? value : Number(value) } : line));
+  return (
+    <div className="modal-backdrop">
+      <form className="modal form-modal purchase-order-modal" onSubmit={(event) => { event.preventDefault(); event.currentTarget.elements.items.value = JSON.stringify(lines.filter((line) => line.productId && line.quantity > 0).map((line) => ({ ...line, productName: products.find((product) => product.id === line.productId)?.name || "", unit: products.find((product) => product.id === line.productId)?.unit || "und." }))); onSubmit(event); }}>
+        <button type="button" className="close-button" onClick={onClose}><X size={18} /></button>
+        <div className="modal-icon"><ClipboardList size={22} /></div>
+        <h2>Nuevo pedido a proveedor</h2>
+        <label>Proveedor<input required name="supplier" placeholder="Nombre del proveedor" /></label>
+        <div className="purchase-order-lines">
+          {lines.map((line, index) => (
+            <div className="purchase-order-line" key={`${index}-${line.productId}`}>
+              <select value={line.productId} onChange={(event) => updateLine(index, "productId", event.target.value)}>
+                <option value="">Producto</option>
+                {products.map((product) => <option value={product.id} key={product.id}>{product.name} · {product.unit || "und."}</option>)}
+              </select>
+              <input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} aria-label="Cantidad pedida" />
+              <input type="number" min="0" step="0.01" value={line.unitCost} onChange={(event) => updateLine(index, "unitCost", event.target.value)} aria-label="Costo unitario" />
+              <button type="button" className="icon-action" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}><Trash2 size={14} /></button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="secondary-button small" onClick={() => setLines((current) => [...current, { productId: products[0]?.id || "", quantity: 1, unitCost: products[0]?.purchaseCost || 0 }])}><Plus size={14} /> Añadir producto</button>
+        <label>Adelanto o pago inicial<input name="paid" type="number" min="0" step="0.01" defaultValue="0" /></label>
+        <label>Notas<input name="notes" placeholder="Condiciones o fecha prometida" /></label>
+        <input type="hidden" name="items" />
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button" type="submit"><Check size={17} /> Guardar pedido</button></div>
+      </form>
+    </div>
+  );
+}
+
+function ReceiveOrderModal({ order, onSubmit, onClose }) {
+  return (
+    <div className="modal-backdrop">
+      <form className="modal form-modal" onSubmit={onSubmit}>
+        <button type="button" className="close-button" onClick={onClose}><X size={18} /></button>
+        <div className="modal-icon"><PackagePlus size={22} /></div>
+        <h2>Recibir pedido {order.id}</h2>
+        <p className="form-note">Proveedor: {order.supplier}. Registra solo lo que llegó.</p>
+        {order.items.map((item, index) => (
+          <label key={item.productId}>{item.productName} · pedido: {item.quantity} {item.unit}
+            <input name={`received-${index}`} type="number" min="0" max={item.quantity} step="0.01" defaultValue={item.received} />
+          </label>
+        ))}
+        <label>Pago adicional<input name="payment" type="number" min="0" step="0.01" defaultValue="0" /></label>
+        <input type="hidden" name="orderId" value={order.id} />
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button" type="submit"><Check size={17} /> Registrar recepción</button></div>
+      </form>
+    </div>
+  );
+}
+
+function PurchaseOrderPrint({ order, onClose }) {
+  return (
+    <div className="modal-backdrop">
+      <div className="modal receipt-modal purchase-order-print" onClick={(event) => event.stopPropagation()}>
+        <button className="close-button" onClick={onClose}><X size={18} /></button>
+        <div className="receipt-top"><span className="brand-mark"><ClipboardList size={18} /></span><span><strong>Vida y Verdad Caranavi</strong><small>Orden de pedido a proveedor</small></span></div>
+        <div className="receipt-number"><span>{order.id}</span><small>{new Date(order.date).toLocaleString("es-BO")}</small></div>
+        <p className="receipt-note"><strong>Proveedor:</strong> {order.supplier}<br />Estado: {order.status}</p>
+        <div className="receipt-lines">
+          {order.items.map((item) => <div key={item.productId}><span><strong>{item.productName}</strong><small>{item.quantity} {item.unit} x {money(item.unitCost)}</small></span><b>{money(item.quantity * item.unitCost)}</b></div>)}
+        </div>
+        <div className="receipt-total"><span>Total</span><strong>{money(order.total)}</strong></div>
+        <p className="receipt-note">Adelanto/pagado: {money(order.paid)}<br />Saldo: {money(order.balance)}<br />{order.notes}</p>
+        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cerrar</button><button className="primary-button" onClick={() => window.print()}><FileText size={16} /> Imprimir</button></div>
+      </div>
+    </div>
   );
 }
 function CustomerView({ customers, sales, onImport, onAdd }) {
@@ -3220,7 +3507,13 @@ function FormModal({
         {stockMode && (
           <label>
             {operation === "Entrada" ? "Cantidad recibida" : "Cantidad retirada"}
-            <input required name="quantity" type="number" min="1" />
+              <input
+                required
+                name="quantity"
+                type="number"
+                min="0.01"
+                step={editingProduct?.unit === "cm" ? "0.01" : "1"}
+              />
           </label>
         )}
         {stockMode && operation === "Entrada" && (
@@ -3301,7 +3594,10 @@ function ReceiptModal({ sale, onClose, onVoid }) {
             {sale.items.map((item) => (
               <div key={item.id}>
                 <span>
-                  {item.quantity} x {item.name}
+                  <strong>{item.name}</strong>
+                  <small>
+                    {item.quantity} {item.unit || "und."} x {money(item.price)}
+                  </small>
                 </span>
                 <b>{money(item.price * item.quantity)}</b>
               </div>

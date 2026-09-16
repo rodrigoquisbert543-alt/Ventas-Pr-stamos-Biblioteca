@@ -7,7 +7,7 @@ create table if not exists products (
   category text not null,
   price numeric(12,2) not null default 0,
   purchase_cost numeric(12,2) not null default 0,
-  stock integer not null default 0,
+  stock numeric(12,2) not null default 0,
   min_stock integer not null default 5,
   unit text not null default 'und.',
   created_at timestamptz not null default now()
@@ -34,6 +34,7 @@ alter table sales add column if not exists qr_amount numeric(12,2) not null defa
 alter table sales add column if not exists status text not null default 'Vigente';
 alter table sales add column if not exists voided_at timestamptz;
 alter table products add column if not exists purchase_cost numeric(12,2) not null default 0;
+alter table products alter column stock type numeric(12,2) using stock::numeric;
 
 create table if not exists materials (
   id text primary key,
@@ -95,8 +96,22 @@ create table if not exists cash_movements (
   reason text not null default '',
   operation text not null default '',
   product_id text,
-  quantity integer not null default 0,
+  quantity numeric(12,2) not null default 0,
   moved_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists purchase_orders (
+  id text primary key,
+  supplier text not null,
+  notes text not null default '',
+  items jsonb not null default '[]'::jsonb,
+  total numeric(12,2) not null default 0,
+  paid numeric(12,2) not null default 0,
+  balance numeric(12,2) not null default 0,
+  status text not null default 'Pendiente',
+  ordered_at timestamptz not null default now(),
+  received_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -107,10 +122,12 @@ alter table teachers enable row level security;
 alter table customers enable row level security;
 alter table loans enable row level security;
 alter table cash_movements enable row level security;
+alter table purchase_orders enable row level security;
 alter table cash_movements add column if not exists reason text not null default '';
 alter table cash_movements add column if not exists operation text not null default '';
 alter table cash_movements add column if not exists product_id text;
 alter table cash_movements add column if not exists quantity integer not null default 0;
+alter table cash_movements alter column quantity type numeric(12,2) using quantity::numeric;
 alter table loans add column if not exists material_id text;
 alter table loans add column if not exists teacher_id text;
 alter table loans add column if not exists due text not null default '';
@@ -122,3 +139,4 @@ create policy "app access teachers" on teachers for all to anon using (true) wit
 create policy "app access customers" on customers for all to anon using (true) with check (true);
 create policy "app access loans" on loans for all to anon using (true) with check (true);
 create policy "app access cash" on cash_movements for all to anon using (true) with check (true);
+create policy "app access purchase orders" on purchase_orders for all to anon using (true) with check (true);
