@@ -90,6 +90,13 @@ function familyMembersOf(customers, family) {
     (customer) => String(customer.family || "").trim().toLowerCase() === key,
   );
 }
+function mergeRecords(localRecords = [], cloudRecords = []) {
+  const merged = new Map(localRecords.map((record) => [record.id, record]));
+  cloudRecords.forEach((record) => {
+    if (record?.id) merged.set(record.id, { ...merged.get(record.id), ...record });
+  });
+  return [...merged.values()];
+}
 function readStorage(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -278,7 +285,7 @@ function App() {
         if (!cloud) return;
         if (cloud.products?.length)
           setProducts(
-            cloud.products.map((product) => ({
+            mergeRecords(products, cloud.products).map((product) => ({
               ...product,
               purchaseCost:
                 product.purchase_cost ?? product.purchaseCost ?? 0,
@@ -287,7 +294,7 @@ function App() {
           );
         if (cloud.sales?.length)
           setSales(
-            cloud.sales.map((sale) => ({
+            mergeRecords(sales, cloud.sales).map((sale) => ({
               ...sale,
               date: sale.sold_at || sale.date,
               status: sale.status || "Vigente",
@@ -300,10 +307,10 @@ function App() {
               payerRelation: sale.payer_relation || sale.payerRelation || "",
             })),
           );
-        if (cloud.materials?.length) setMaterials(cloud.materials);
+        if (cloud.materials?.length) setMaterials((current) => mergeRecords(current, cloud.materials));
         if (cloud.loans?.length)
           setLoans(
-            cloud.loans.map((loan) => ({
+            mergeRecords(loans, cloud.loans).map((loan) => ({
               ...loan,
               materialId: loan.material_id || loan.materialId || "",
               teacherId: loan.teacher_id || loan.teacherId || "",
@@ -311,11 +318,11 @@ function App() {
               date: loan.loaned_at || loan.date,
             })),
           );
-        if (cloud.teachers?.length) setTeachers(cloud.teachers);
-        if (cloud.customers?.length) setCustomers(cloud.customers);
+        if (cloud.teachers?.length) setTeachers((current) => mergeRecords(current, cloud.teachers));
+        if (cloud.customers?.length) setCustomers((current) => mergeRecords(current, cloud.customers));
         if (cloud.purchase_orders?.length)
           setPurchaseOrders(
-            cloud.purchase_orders.map((order) => ({
+            mergeRecords(purchaseOrders, cloud.purchase_orders).map((order) => ({
               ...order,
               date: order.ordered_at || order.date,
               receivedAt: order.received_at || order.receivedAt || "",
@@ -324,7 +331,7 @@ function App() {
         if (cloud.cash_movements?.length)
           setCash((current) => ({
             ...current,
-            movements: cloud.cash_movements.map((movement) => ({
+            movements: mergeRecords(current.movements, cloud.cash_movements).map((movement) => ({
               ...movement,
               productId: movement.product_id || movement.productId || "",
               operation: movement.operation || "",
