@@ -2290,8 +2290,47 @@ function InventoryView({
     const futureSold = futureSales.reduce((sum, item) => sum + item.quantity, 0);
     const finalStock = product.stock - futureEntries + futureExits + futureSold;
     const initialStock = finalStock - entries + exits + sold;
-    return { ...product, initialStock, sold, finalStock };
+    const purchaseCost = Number(product.purchaseCost || 0);
+    const salePrice = Number(product.price || 0);
+    return {
+      ...product,
+      initialStock,
+      sold,
+      finalStock,
+      purchaseCost,
+      salePrice,
+      initialCostValue: initialStock * purchaseCost,
+      soldCostValue: sold * purchaseCost,
+      soldSalesValue: sold * salePrice,
+      finalCostValue: finalStock * purchaseCost,
+      finalSalesValue: finalStock * salePrice,
+      grossMarginValue: sold * (salePrice - purchaseCost),
+    };
   });
+  const reportTotals = inventoryReport.reduce(
+    (totals, product) => ({
+      initialStock: totals.initialStock + product.initialStock,
+      sold: totals.sold + product.sold,
+      finalStock: totals.finalStock + product.finalStock,
+      initialCostValue: totals.initialCostValue + product.initialCostValue,
+      soldCostValue: totals.soldCostValue + product.soldCostValue,
+      soldSalesValue: totals.soldSalesValue + product.soldSalesValue,
+      finalCostValue: totals.finalCostValue + product.finalCostValue,
+      finalSalesValue: totals.finalSalesValue + product.finalSalesValue,
+      grossMarginValue: totals.grossMarginValue + product.grossMarginValue,
+    }),
+    {
+      initialStock: 0,
+      sold: 0,
+      finalStock: 0,
+      initialCostValue: 0,
+      soldCostValue: 0,
+      soldSalesValue: 0,
+      finalCostValue: 0,
+      finalSalesValue: 0,
+      grossMarginValue: 0,
+    },
+  );
   return (
     <section className="inventory-stack">
       <section className="panel lower-panel">
@@ -2377,7 +2416,7 @@ function InventoryView({
       <section className="panel lower-panel inventory-report">
         <PanelHeader
           title="Informe de inventario"
-          detail="Saldo inicial, ventas y saldo final por producto"
+          detail="Existencias, costos, ventas y valorización del período"
           action={
             <button
               className="secondary-button small"
@@ -2410,9 +2449,12 @@ function InventoryView({
         <div className="inventory-table">
           <div className="inventory-head inventory-report-head">
             <span>Producto</span>
+            <span>Costo compra</span>
+            <span>Precio venta</span>
             <span>Inventario inicial</span>
             <span>Cantidad vendida</span>
             <span>Saldo final</span>
+            <span>Valor costo final</span>
           </div>
           {inventoryReport.map((product) => (
             <div className="inventory-row inventory-report-row" key={product.id}>
@@ -2423,11 +2465,29 @@ function InventoryView({
                   <small>{product.id}</small>
                 </strong>
               </span>
+              <span>{money(product.purchaseCost)}</span>
+              <span>{money(product.salePrice)}</span>
               <span>{product.initialStock} {product.unit}</span>
               <span>{product.sold} {product.unit}</span>
               <span>{product.finalStock} {product.unit}</span>
+              <span>{money(product.finalCostValue)}</span>
             </div>
           ))}
+          <div className="inventory-row inventory-report-total">
+            <strong>Totales</strong>
+            <span>-</span>
+            <span>-</span>
+            <strong>{reportTotals.initialStock} und.</strong>
+            <strong>{reportTotals.sold} und.</strong>
+            <strong>{reportTotals.finalStock} und.</strong>
+            <strong>{money(reportTotals.finalCostValue)}</strong>
+          </div>
+        </div>
+        <div className="inventory-report-summary">
+          <span>Valor inicial al costo: <strong>{money(reportTotals.initialCostValue)}</strong></span>
+          <span>Ventas a precio de venta: <strong>{money(reportTotals.soldSalesValue)}</strong></span>
+          <span>Costo de lo vendido: <strong>{money(reportTotals.soldCostValue)}</strong></span>
+          <span>Margen bruto estimado: <strong>{money(reportTotals.grossMarginValue)}</strong></span>
         </div>
       </section>
     </section>
