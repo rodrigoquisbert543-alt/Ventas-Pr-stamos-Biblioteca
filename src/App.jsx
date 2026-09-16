@@ -730,8 +730,8 @@ function App() {
           : product,
       ),
     );
-    const reason = data.get("reason") || "Reposición de mercadería";
-    const cost = Number(data.get("cost") || 0);
+    const reason = data.get("reason") || "Otro";
+    const cost = operation === "Entrada" ? Number(data.get("cost") || 0) : 0;
     const movement = {
       id: `M-${Date.now()}`,
       productId: editingProduct.id,
@@ -1553,8 +1553,9 @@ function App() {
       )}
       {modal === "stock" && (
         <FormModal
-          title="Aumentar mercadería"
+          title="Movimiento de inventario"
           icon={PackagePlus}
+          stockMode
           onSubmit={addStock}
           onClose={() => {
             setEditingProduct(null);
@@ -1566,14 +1567,6 @@ function App() {
                 Producto: {editingProduct?.name} · Stock actual:{" "}
                 {editingProduct?.stock}
               </p>
-              <label>
-                Cantidad recibida
-                <input required name="quantity" type="number" min="1" />
-              </label>
-              <label>
-                Costo total pagado (opcional)
-                <input name="cost" type="number" step="0.01" min="0" />
-              </label>
             </>
           }
         />
@@ -2066,10 +2059,10 @@ function SaleView({
                   type="button"
                   className="stock-entry-button"
                   onClick={() => onQuickStock(item)}
-                  title="Registrar ingreso de mercadería"
+                  title="Registrar movimiento de inventario"
                 >
                   <PackagePlus size={14} />
-                  Registrar ingreso
+                  Movimiento de inventario
                 </button>
               </div>
             ))}
@@ -2365,7 +2358,7 @@ function InventoryView({
                 <button
                   className="icon-action"
                   onClick={() => onStock(product)}
-                  title="Aumentar mercadería"
+                  title="Registrar movimiento de inventario"
                 >
                   <Plus size={15} />
                 </button>
@@ -3018,7 +3011,15 @@ function LoansView({
     </section>
   );
 }
-function FormModal({ title, icon: Icon, fields, onSubmit, onClose }) {
+function FormModal({
+  title,
+  icon: Icon,
+  fields,
+  onSubmit,
+  onClose,
+  stockMode = false,
+}) {
+  const [operation, setOperation] = useState("Entrada");
   return (
     <div className="modal-backdrop">
       <form className="modal form-modal" onSubmit={onSubmit}>
@@ -3029,27 +3030,49 @@ function FormModal({ title, icon: Icon, fields, onSubmit, onClose }) {
           <Icon size={22} />
         </div>
         <h2>{title}</h2>
-        {title === "Aumentar mercadería" && (
+        {stockMode && (
           <label>
             Operación
-            <select name="operation">
+            <select
+              name="operation"
+              value={operation}
+              onChange={(event) => setOperation(event.target.value)}
+            >
               <option>Entrada</option>
               <option>Salida</option>
             </select>
           </label>
         )}
-        {title === "Aumentar mercadería" && (
+        {stockMode && (
           <label>
             Motivo
             <select name="reason">
-              <option>Reposición de mercadería</option>
-              <option>Defecto de fábrica</option>
-              <option>Daño</option>
-              <option>Deterioro</option>
-              <option>Libro incompleto</option>
-              <option>Pérdida</option>
-              <option>Otro</option>
+              {operation === "Entrada" ? (
+                <option>Compra o reposición de mercadería</option>
+              ) : (
+                <>
+                  <option>Deterioro</option>
+                  <option>Defecto de fábrica</option>
+                  <option>Daño</option>
+                  <option>Libro incompleto</option>
+                  <option>Pérdida</option>
+                  <option>Donación o retiro autorizado</option>
+                  <option>Otro</option>
+                </>
+              )}
             </select>
+          </label>
+        )}
+        {stockMode && (
+          <label>
+            {operation === "Entrada" ? "Cantidad recibida" : "Cantidad retirada"}
+            <input required name="quantity" type="number" min="1" />
+          </label>
+        )}
+        {stockMode && operation === "Entrada" && (
+          <label>
+            Costo total de compra (opcional)
+            <input name="cost" type="number" step="0.01" min="0" />
           </label>
         )}
         {fields}
