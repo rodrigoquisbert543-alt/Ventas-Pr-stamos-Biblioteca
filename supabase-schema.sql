@@ -56,8 +56,19 @@ create table if not exists customers (
   name text not null,
   carnet text not null default '',
   phone text not null default '',
+  family text not null default '',
+  relation text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table customers add column if not exists family text not null default '';
+alter table customers add column if not exists relation text not null default '';
+
+alter table sales add column if not exists family text not null default '';
+alter table sales add column if not exists relation text not null default '';
+alter table sales add column if not exists payer text not null default '';
+alter table sales add column if not exists payer_id text;
+alter table sales add column if not exists payer_relation text not null default '';
 
 create table if not exists loans (
   id text primary key,

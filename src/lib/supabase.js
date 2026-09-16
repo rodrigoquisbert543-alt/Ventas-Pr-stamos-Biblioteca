@@ -20,7 +20,7 @@ export async function syncCloudState({ products, sales, materials, loans, teache
   if (!supabase) return
   const payloads = {
     products: products.map(({ id, minStock, ...item }) => ({ id, ...item, min_stock: minStock })),
-    sales: sales.map(({ id, ...item }) => ({ id, customer: item.customer, customer_id: item.customerId, carnet: item.carnet, payment: item.payment, cash_amount: item.cashAmount, qr_amount: item.qrAmount, total: item.total, status: item.status || 'Vigente', voided_at: item.voidedAt || null, sold_at: item.date, items: item.items })),
+    sales: sales.map(({ id, ...item }) => ({ id, customer: item.customer, customer_id: item.customerId, carnet: item.carnet, family: item.family || '', relation: item.relation || '', payer: item.payer || '', payer_id: item.payerId || '', payer_relation: item.payerRelation || '', payment: item.payment, cash_amount: item.cashAmount, qr_amount: item.qrAmount, total: item.total, status: item.status || 'Vigente', voided_at: item.voidedAt || null, sold_at: item.date, items: item.items })),
     materials: materials.map(({ id, ...item }) => ({ id, ...item })),
     loans: loans.map(({ id, ...item }) => ({ id, ...item, loaned_at: item.date })),
     teachers: teachers.map(({ id, ...item }) => ({ id, ...item })),
