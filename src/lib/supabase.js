@@ -12,7 +12,8 @@ export async function loadCloudState() {
   if (!supabase) return null
   const tables = ['products', 'sales', 'materials', 'loans', 'teachers', 'customers', 'cash_movements', 'purchase_orders']
   const result = await Promise.all(tables.map(async (table) => {
-    const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from(table).select('*')
+    if (error) console.error(`No se pudo cargar ${table} desde Supabase`, error)
     return [table, error ? [] : data]
   }))
   return Object.fromEntries(result)

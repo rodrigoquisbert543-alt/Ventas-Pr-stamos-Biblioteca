@@ -1285,7 +1285,7 @@ function App() {
               <h1>
                 {activeNav === "Nueva venta"
                   ? "Punto de venta"
-                  : "Buenos días, Rodrigo"}
+                  : "Bienvenido Rodrigo"}
               </h1>
               <p className="subtitle">
                 {activeNav === "Nueva venta"
