@@ -181,6 +181,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [selectedSale, setSelectedSale] = useState(null);
   const [selectedQr, setSelectedQr] = useState(null);
+  const [selectedLoanMaterial, setSelectedLoanMaterial] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   const [scanValue, setScanValue] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -242,6 +243,8 @@ function App() {
           setProducts(
             cloud.products.map((product) => ({
               ...product,
+              purchaseCost:
+                product.purchase_cost ?? product.purchaseCost ?? 0,
               minStock: product.min_stock ?? product.minStock ?? 5,
             })),
           );
@@ -265,6 +268,9 @@ function App() {
           setLoans(
             cloud.loans.map((loan) => ({
               ...loan,
+              materialId: loan.material_id || loan.materialId || "",
+              teacherId: loan.teacher_id || loan.teacherId || "",
+              due: loan.due || "",
               date: loan.loaned_at || loan.date,
             })),
           );
@@ -275,6 +281,10 @@ function App() {
             ...current,
             movements: cloud.cash_movements.map((movement) => ({
               ...movement,
+              productId: movement.product_id || movement.productId || "",
+              operation: movement.operation || "",
+              reason: movement.reason || "",
+              quantity: movement.quantity ?? 0,
               cashAmount: movement.cash_amount ?? movement.cashAmount ?? 0,
               qrAmount: movement.qr_amount ?? movement.qrAmount ?? 0,
               date: movement.moved_at || movement.date,
@@ -638,7 +648,8 @@ function App() {
       return showToast("Ese material no está disponible");
     setLoanScan(false);
     setScanValue("");
-    registerLoan(material, true);
+    setSelectedLoanMaterial(material);
+    setModal("loan");
   };
   useEffect(() => {
     loanScanHandlerRef.current = handleLoanScan;
@@ -651,6 +662,7 @@ function App() {
       name: data.get("name"),
       category: data.get("category"),
       price: Number(data.get("price")),
+      purchaseCost: Number(data.get("purchaseCost") || 0),
       stock: Number(data.get("stock")),
       minStock: 5,
       unit: "und.",
@@ -687,20 +699,10 @@ function App() {
               name: data.get("name"),
               category: data.get("category"),
               price: Number(data.get("price")),
+              purchaseCost: Number(data.get("purchaseCost") || 0),
               minStock: Number(data.get("minStock")),
             }
           : product,
-      ),
-    );
-    setCart((current) =>
-      current.map((item) =>
-        item.id === editingProduct.id
-          ? {
-              ...item,
-              stock:
-                item.stock + (operation === "Salida" ? -quantity : quantity),
-            }
-          : item,
       ),
     );
     setEditingProduct(null);
@@ -732,6 +734,7 @@ function App() {
     const cost = Number(data.get("cost") || 0);
     const movement = {
       id: `M-${Date.now()}`,
+      productId: editingProduct.id,
       type:
         operation === "Salida"
           ? "Salida de inventario"
@@ -740,10 +743,20 @@ function App() {
             : "Entrada de inventario",
       concept: `${operation}: ${editingProduct.name}`,
       reason,
+      operation,
       quantity,
       amount: cost,
       date,
     };
+    if (operation === "Entrada" && cost > 0) {
+      setProducts((current) =>
+        current.map((product) =>
+          product.id === editingProduct.id
+            ? { ...product, purchaseCost: cost / quantity }
+            : product,
+        ),
+      );
+    }
     setCash((current) => ({
       ...current,
       movements: [movement, ...current.movements],
@@ -786,6 +799,9 @@ function App() {
             name: row.nombre || row.name || row.producto || "",
             category: row.categoria || row.category || "Otros",
             price: Number(row.precio || row.price || row.precio_de_venta || 0),
+            purchaseCost: Number(
+              row.costo_de_compra || row.purchase_cost || row.purchaseCost || 0,
+            ),
             stock: Number(row.stock || row.existencias || 0),
             minStock: Number(row.stock_minimo || row.min_stock || 5),
             unit: row.unidad || row.unit || "und.",
@@ -844,14 +860,16 @@ function App() {
     setModal(null);
     showToast(`${movement.kind} registrado`);
   };
-  function registerLoan(material, force = false) {
+  function registerLoan(material, force = false, teacherId = "", due = "") {
     if (material.status === "Disponible" && !force) {
       setLoanScan(true);
       setScanValue("");
       setModal("scan");
       return;
     }
-    const teacher = teachers[0];
+    const teacher = teachers.find((item) => item.id === teacherId) || teachers[0];
+    if (!teacher)
+      return showToast("Registra al menos un maestro antes de prestar material");
     if (material.status === "Prestado") {
       setMaterials((current) =>
         current.map((item) =>
@@ -864,8 +882,11 @@ function App() {
         {
           id: `L-${Date.now()}`,
           action: "Devolución",
+          materialId: material.id,
           material: material.name,
+          teacherId: teacher?.id || "",
           teacher: material.borrower,
+          due: "",
           date: new Date().toISOString(),
         },
         ...current,
@@ -879,7 +900,7 @@ function App() {
                 ...item,
                 status: "Prestado",
                 borrower: teacher.name,
-                due: "Mañana, 09:00",
+                due: due || "Sin fecha definida",
               }
             : item,
         ),
@@ -888,14 +909,27 @@ function App() {
         {
           id: `L-${Date.now()}`,
           action: "Préstamo",
+          materialId: material.id,
           material: material.name,
+          teacherId: teacher.id,
           teacher: teacher.name,
+          due: due || "Sin fecha definida",
           date: new Date().toISOString(),
         },
         ...current,
       ]);
       showToast("Préstamo registrado");
     }
+  };
+  const saveManualLoan = (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const teacherId = String(data.get("teacherId") || "");
+    const due = String(data.get("due") || "").trim();
+    if (!selectedLoanMaterial) return showToast("Selecciona un material");
+    registerLoan(selectedLoanMaterial, true, teacherId, due);
+    setSelectedLoanMaterial(null);
+    setModal(null);
   };
   const summaryMatchesDate = (value) => {
     if (!value) return true;
@@ -1271,6 +1305,8 @@ function App() {
           {activeNav === "Inventario" && (
             <InventoryView
               products={products}
+              sales={sales}
+              cash={cash}
               search={search}
               setSearch={setSearch}
               onAdd={() => setModal("product")}
@@ -1320,6 +1356,10 @@ function App() {
               materials={materials}
               loans={loans}
               onLoan={registerLoan}
+              onManualLoan={(material) => {
+                setSelectedLoanMaterial(material);
+                setModal("loan");
+              }}
               onEdit={(material) => {
                 const name = window.prompt("Nombre del objeto", material.name);
                 if (!name?.trim()) return;
@@ -1429,6 +1469,16 @@ function App() {
                   />
                 </label>
                 <label>
+                  Costo de compra
+                  <input
+                    name="purchaseCost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                  />
+                </label>
+                <label>
                   Stock inicial
                   <input required name="stock" type="number" min="0" />
                 </label>
@@ -1477,6 +1527,16 @@ function App() {
                   />
                 </label>
                 <label>
+                  Costo de compra
+                  <input
+                    name="purchaseCost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    defaultValue={editingProduct?.purchaseCost || 0}
+                  />
+                </label>
+                <label>
                   Stock mínimo
                   <input
                     required
@@ -1513,6 +1573,41 @@ function App() {
               <label>
                 Costo total pagado (opcional)
                 <input name="cost" type="number" step="0.01" min="0" />
+              </label>
+            </>
+          }
+        />
+      )}
+      {modal === "loan" && (
+        <FormModal
+          title="Registrar préstamo"
+          icon={ClipboardList}
+          onSubmit={saveManualLoan}
+          onClose={() => {
+            setSelectedLoanMaterial(null);
+            setModal(null);
+          }}
+          fields={
+            <>
+              <p className="form-note">
+                Material: {selectedLoanMaterial?.name || "-"}
+              </p>
+              <label>
+                Maestro
+                <select required name="teacherId" defaultValue="">
+                  <option value="" disabled>
+                    Selecciona un maestro
+                  </option>
+                  {teachers.map((teacher) => (
+                    <option value={teacher.id} key={teacher.id}>
+                      {teacher.name} · {teacher.role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Fecha o detalle de devolución (opcional)
+                <input name="due" placeholder="Ej. 25/09/2026" />
               </label>
             </>
           }
@@ -1850,10 +1945,11 @@ function SaleView({
   const [relation, setRelation] = useState("Estudiante");
   const [payerId, setPayerId] = useState("self");
   const matchingCustomers = customers.filter((customer) =>
-    `${customer.name} ${customer.carnet} ${customer.family || ""}`
+    `${customer.name} ${customer.carnet} ${customer.phone || ""} ${customer.family || ""} ${customer.relation || ""}`
       .toLowerCase()
       .includes(customerQuery.toLowerCase()),
   );
+  const customerSuggestions = matchingCustomers.slice(0, 8);
   const selectedRecord = customers.find((item) => item.id === selectedCustomer);
   const familyOptions = uniqueFamilies(customers);
   const relatives = familyMembersOf(customers, familyName).filter(
@@ -1862,6 +1958,7 @@ function SaleView({
   const chooseCustomer = (id) => {
     setSelectedCustomer(id);
     const record = customers.find((item) => item.id === id);
+    setCustomerQuery(record?.name || "");
     setFamilyName(record?.family || "");
     setRelation(record?.relation || "Estudiante");
     setPayerId("self");
@@ -1989,7 +2086,11 @@ function SaleView({
             Cliente
             <input
               value={customerQuery}
-              onChange={(event) => setCustomerQuery(event.target.value)}
+              onChange={(event) => {
+                setCustomerQuery(event.target.value);
+                setSelectedCustomer("");
+                setPayerId("self");
+              }}
               placeholder="Buscar por nombre, carnet o familia"
               aria-label="Buscar cliente por nombre, carnet o familia"
             />
@@ -2019,6 +2120,24 @@ function SaleView({
               </button>
             </span>
           </label>
+          {customerQuery && customerSuggestions.length > 0 && (
+            <div className="customer-suggestions" role="listbox">
+              {customerSuggestions.map((customer) => (
+                <button
+                  type="button"
+                  key={customer.id}
+                  onClick={() => chooseCustomer(customer.id)}
+                >
+                  <strong>{customer.name}</strong>
+                  <small>
+                    {[customer.carnet && `Carnet ${customer.carnet}`, customer.family, customer.relation]
+                      .filter(Boolean)
+                      .join(" · ") || "Cliente registrado"}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="family-link">
             <label>
               Vincular a familia
@@ -2119,6 +2238,8 @@ function SaleView({
 }
 function InventoryView({
   products,
+  sales,
+  cash,
   search,
   setSearch,
   onAdd,
@@ -2126,8 +2247,61 @@ function InventoryView({
   onEdit,
   onStock,
 }) {
+  const [reportStart, setReportStart] = useState("");
+  const [reportEnd, setReportEnd] = useState("");
+  const matchesReportDate = (value, afterEnd = false) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return false;
+    const from = reportStart ? new Date(`${reportStart}T00:00:00`) : null;
+    const to = reportEnd ? new Date(`${reportEnd}T23:59:59.999`) : null;
+    if (afterEnd) return Boolean(to && date > to);
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    return true;
+  };
+  const inventoryReport = products.map((product) => {
+    const saleLines = sales.flatMap((sale) =>
+      sale.status === "Anulada" || !matchesReportDate(sale.date)
+        ? []
+        : sale.items
+            .filter((item) => item.id === product.id)
+            .map((item) => ({ ...item, date: sale.date })),
+    );
+    const futureSales = sales.flatMap((sale) =>
+      sale.status === "Anulada" || !matchesReportDate(sale.date, true)
+        ? []
+        : sale.items.filter((item) => item.id === product.id),
+    );
+    const productMovements = (cash.movements || []).filter(
+      (movement) => movement.productId === product.id,
+    );
+    const periodMovements = productMovements.filter((movement) =>
+      matchesReportDate(movement.date),
+    );
+    const futureMovements = productMovements.filter((movement) =>
+      matchesReportDate(movement.date, true),
+    );
+    const entries = periodMovements
+      .filter((movement) => movement.operation === "Entrada")
+      .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
+    const exits = periodMovements
+      .filter((movement) => movement.operation === "Salida")
+      .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
+    const futureEntries = futureMovements
+      .filter((movement) => movement.operation === "Entrada")
+      .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
+    const futureExits = futureMovements
+      .filter((movement) => movement.operation === "Salida")
+      .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
+    const sold = saleLines.reduce((sum, item) => sum + item.quantity, 0);
+    const futureSold = futureSales.reduce((sum, item) => sum + item.quantity, 0);
+    const finalStock = product.stock - futureEntries + futureExits + futureSold;
+    const initialStock = finalStock - entries + exits + sold;
+    return { ...product, initialStock, sold, finalStock };
+  });
   return (
-    <section className="panel lower-panel">
+    <section className="inventory-stack">
+      <section className="panel lower-panel">
       <PanelHeader
         title="Inventario de productos"
         detail="Uniformes, libros, fotocopias y útiles"
@@ -2149,9 +2323,10 @@ function InventoryView({
         </div>
       </div>
       <div className="inventory-table">
-        <div className="inventory-head">
+        <div className="inventory-head inventory-products-head">
           <span>Producto</span>
           <span>Categoría</span>
+          <span>Costo compra</span>
           <span>Precio</span>
           <span>Existencia</span>
           <span>Acciones</span>
@@ -2163,7 +2338,7 @@ function InventoryView({
               .includes(search.toLowerCase()),
           )
           .map((product) => (
-            <div className="inventory-row" key={product.id}>
+            <div className="inventory-row inventory-products-row" key={product.id}>
               <span className="product-cell">
                 <ProductIcon category={product.category} />
                 <strong>
@@ -2172,6 +2347,7 @@ function InventoryView({
                 </strong>
               </span>
               <span>{product.category}</span>
+              <span>{money(product.purchaseCost || 0)}</span>
               <span>{money(product.price)}</span>
               <span
                 className={product.stock <= product.minStock ? "low-stock" : ""}
@@ -2204,6 +2380,63 @@ function InventoryView({
             </div>
           ))}
       </div>
+      </section>
+      <section className="panel lower-panel inventory-report">
+        <PanelHeader
+          title="Informe de inventario"
+          detail="Saldo inicial, ventas y saldo final por producto"
+          action={
+            <button
+              className="secondary-button small"
+              type="button"
+              onClick={() => window.print()}
+            >
+              <FileText size={15} />
+              Imprimir informe
+            </button>
+          }
+        />
+        <div className="date-filter-fields">
+          <label>
+            <span>Desde</span>
+            <input
+              type="date"
+              value={reportStart}
+              onChange={(event) => setReportStart(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Hasta</span>
+            <input
+              type="date"
+              value={reportEnd}
+              onChange={(event) => setReportEnd(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="inventory-table">
+          <div className="inventory-head inventory-report-head">
+            <span>Producto</span>
+            <span>Inventario inicial</span>
+            <span>Cantidad vendida</span>
+            <span>Saldo final</span>
+          </div>
+          {inventoryReport.map((product) => (
+            <div className="inventory-row inventory-report-row" key={product.id}>
+              <span className="product-cell">
+                <ProductIcon category={product.category} />
+                <strong>
+                  {product.name}
+                  <small>{product.id}</small>
+                </strong>
+              </span>
+              <span>{product.initialStock} {product.unit}</span>
+              <span>{product.sold} {product.unit}</span>
+              <span>{product.finalStock} {product.unit}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </section>
   );
 }
@@ -2673,6 +2906,7 @@ function LoansView({
   materials,
   loans,
   onLoan,
+  onManualLoan,
   onEdit,
   teachers,
   onAddTeacher,
@@ -2734,10 +2968,16 @@ function LoansView({
                   className="text-button"
                   onClick={() => onLoan(material)}
                 >
-                  {material.status === "Prestado"
-                    ? "Registrar devolución"
-                    : "Prestar"}
+                  {material.status === "Prestado" ? "Registrar devolución" : "Prestar con QR"}
                 </button>
+                {material.status === "Disponible" && (
+                  <button
+                    className="text-button"
+                    onClick={() => onManualLoan(material)}
+                  >
+                    Manual
+                  </button>
+                )}
               </span>
             </div>
           ))}
