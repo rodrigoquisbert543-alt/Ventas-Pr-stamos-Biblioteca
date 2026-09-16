@@ -97,6 +97,31 @@ function mergeRecords(localRecords = [], cloudRecords = []) {
   });
   return [...merged.values()];
 }
+function normalizedValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+function sameCustomer(first, second) {
+  if (first.id && second.id && first.id === second.id) return true;
+  const firstCarnet = normalizedValue(first.carnet);
+  const secondCarnet = normalizedValue(second.carnet);
+  if (firstCarnet && secondCarnet && firstCarnet === secondCarnet) return true;
+  return (
+    normalizedValue(first.name) === normalizedValue(second.name) &&
+    normalizedValue(first.phone) === normalizedValue(second.phone)
+  );
+}
+function sameProduct(first, second) {
+  if (first.id && second.id && first.id === second.id) return true;
+  return (
+    normalizedValue(first.name) === normalizedValue(second.name) &&
+    normalizedValue(first.unit || "und.") === normalizedValue(second.unit || "und.")
+  );
+}
 function readStorage(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -720,6 +745,10 @@ function App() {
       minStock: 5,
       unit: data.get("unit") || "und.",
     };
+    if (products.some((item) => sameProduct(item, product))) {
+      showToast("Ese producto ya está registrado");
+      return;
+    }
     setProducts((current) => [...current, product]);
     setModal(null);
     showToast("Producto añadido al inventario");
@@ -931,7 +960,7 @@ function App() {
     reader.onload = () => {
       const rows = parseCsv(String(reader.result));
       if (type === "customers") {
-        const imported = rows
+        const candidates = rows
           .map((row, index) => ({
             id:
               row.id ||
@@ -943,10 +972,25 @@ function App() {
             relation: row.parentesco || row.relacion || row.relation || "",
           }))
           .filter((item) => item.name);
-        setCustomers((current) => [...current, ...imported]);
-        showToast(`${imported.length} clientes importados`);
+        setCustomers((current) => {
+          const added = candidates.filter(
+            (candidate) =>
+              !current.some((existing) => sameCustomer(existing, candidate)) &&
+              !candidates.some(
+                (other) => other !== candidate && sameCustomer(other, candidate),
+              ),
+          );
+          showToast(
+            `${added.length} clientes importados${
+              candidates.length - added.length
+                ? `; ${candidates.length - added.length} duplicados omitidos`
+                : ""
+            }`,
+          );
+          return [...current, ...added];
+        });
       } else if (type === "materials") {
-        const imported = rows
+        const candidates = rows
           .map((row, index) => ({
             id:
               row.id ||
@@ -959,10 +1003,10 @@ function App() {
             due: row.devolucion || row.due || "",
           }))
           .filter((item) => item.name && item.location);
-        setMaterials((current) => [...current, ...imported]);
-        showToast(`${imported.length} materiales importados`);
+        setMaterials((current) => [...current, ...candidates]);
+        showToast(`${candidates.length} materiales importados`);
       } else {
-        const imported = rows
+        const candidates = rows
           .map((row, index) => ({
             id:
               row.id ||
@@ -978,8 +1022,23 @@ function App() {
             unit: row.unidad || row.unit || "und.",
           }))
           .filter((item) => item.name);
-        setProducts((current) => [...current, ...imported]);
-        showToast(`${imported.length} productos importados`);
+        setProducts((current) => {
+          const added = candidates.filter(
+            (candidate) =>
+              !current.some((existing) => sameProduct(existing, candidate)) &&
+              !candidates.some(
+                (other) => other !== candidate && sameProduct(other, candidate),
+              ),
+          );
+          showToast(
+            `${added.length} productos importados${
+              candidates.length - added.length
+                ? `; ${candidates.length - added.length} duplicados omitidos`
+                : ""
+            }`,
+          );
+          return [...current, ...added];
+        });
       }
     };
     reader.readAsText(file, "UTF-8");
@@ -1871,6 +1930,10 @@ function App() {
               family: String(data.get("family") || "").trim(),
               relation: String(data.get("relation") || "").trim(),
             };
+            if (customers.some((item) => sameCustomer(item, customer))) {
+              showToast("Ese cliente ya está registrado");
+              return;
+            }
             setCustomers((current) => [...current, customer]);
             setModal(null);
             showToast("Cliente registrado; ya puede seleccionarse en la venta");
