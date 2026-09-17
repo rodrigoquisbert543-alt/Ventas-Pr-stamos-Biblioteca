@@ -2760,8 +2760,9 @@ function InventoryView({
             <button className="secondary-button small" type="button" onClick={() => onReceiveOrder(order)}>
               Registrar recepción
             </button>
-            <button className="icon-action" type="button" title="Imprimir orden" onClick={() => onPrintOrder(order)}>
+            <button className="secondary-button small purchase-order-print-button" type="button" onClick={() => onPrintOrder(order)}>
               <FileText size={15} />
+              Imprimir nota
             </button>
           </div>
         )) : (
