@@ -51,7 +51,6 @@ const navItems = [
 ];
 const money = (value) => `Bs. ${Number(value).toFixed(2)}`;
 const familyRelations = ["Estudiante", "Padre", "Madre", "Tutor", "Otro"];
-const payerRelations = ["Padre", "Madre", "Tutor", "Otro"];
 function nextCustomerId(list) {
   const used = new Set(list.map((item) => item.id));
   let index = list.length + 1;
@@ -80,15 +79,6 @@ function uniqueFamilies(customers) {
         .filter(Boolean),
     ),
   ].sort((a, b) => a.localeCompare(b, "es"));
-}
-function familyMembersOf(customers, family) {
-  const key = String(family || "")
-    .trim()
-    .toLowerCase();
-  if (!key) return [];
-  return customers.filter(
-    (customer) => String(customer.family || "").trim().toLowerCase() === key,
-  );
 }
 function mergeRecords(localRecords = [], cloudRecords = []) {
   const merged = new Map(localRecords.map((record) => [record.id, record]));
@@ -569,55 +559,9 @@ function App() {
     if (unavailable)
       return showToast(`Stock insuficiente: ${unavailable.name}`);
     const customer = data.get("customer") || "Familia del colegio";
-    const family = String(data.get("family") || "").trim();
-    const relation = String(data.get("relation") || "").trim();
-    const payerChoice = String(data.get("payer") || "self");
-    const newPayerName = String(data.get("payerName") || "").trim();
-    const newPayerRelation = String(data.get("payerRelation") || "Padre").trim();
-    let nextCustomers = customers;
-    let customerRecord = nextCustomers.find(
+    const customerRecord = customers.find(
       (item) => item.id === customer || item.name === customer,
     );
-    if (customerRecord && (family || relation)) {
-      customerRecord = {
-        ...customerRecord,
-        family: family || customerRecord.family || "",
-        relation: relation || customerRecord.relation || "Estudiante",
-      };
-      nextCustomers = nextCustomers.map((item) =>
-        item.id === customerRecord.id ? customerRecord : item,
-      );
-    }
-    let payerRecord =
-      payerChoice === "new"
-        ? null
-        : payerChoice && payerChoice !== "self"
-          ? nextCustomers.find((item) => item.id === payerChoice)
-          : customerRecord;
-    if (payerChoice === "new" && newPayerName) {
-      payerRecord = {
-        id: nextCustomerId(nextCustomers),
-        name: newPayerName,
-        carnet: "",
-        phone: "",
-        family: family || customerRecord?.family || "",
-        relation: newPayerRelation,
-      };
-      nextCustomers = [...nextCustomers, payerRecord];
-    } else if (payerRecord && family) {
-      payerRecord = {
-        ...payerRecord,
-        family,
-        relation:
-          payerRecord.id === customerRecord?.id
-            ? relation || payerRecord.relation
-            : payerRecord.relation || "",
-      };
-      nextCustomers = nextCustomers.map((item) =>
-        item.id === payerRecord.id ? payerRecord : item,
-      );
-    }
-    if (nextCustomers !== customers) setCustomers(nextCustomers);
     const sale = {
       id: `V-${String(sales.length + 1).padStart(5, "0")}`,
       date: new Date().toISOString(),
@@ -625,11 +569,11 @@ function App() {
       customer: customerRecord?.name || customer,
       customerId: customerRecord?.id || "",
       carnet: customerRecord?.carnet || "",
-      family: family || customerRecord?.family || payerRecord?.family || "",
-      relation: customerRecord?.relation || relation,
-      payer: payerRecord?.name || customerRecord?.name || "",
-      payerId: payerRecord?.id || "",
-      payerRelation: payerRecord?.relation || "",
+      family: customerRecord?.family || "",
+      relation: customerRecord?.relation || "",
+      payer: customerRecord?.name || "",
+      payerId: customerRecord?.id || "",
+      payerRelation: customerRecord?.relation || "",
       payment,
       cashAmount,
       qrAmount,
@@ -2318,9 +2262,6 @@ function SaleView({
 }) {
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
-  const [familyName, setFamilyName] = useState("");
-  const [relation, setRelation] = useState("Estudiante");
-  const [payerId, setPayerId] = useState("self");
   const matchingCustomers = customers.filter((customer) =>
     `${customer.name} ${customer.carnet} ${customer.phone || ""} ${customer.family || ""} ${customer.relation || ""}`
       .toLowerCase()
@@ -2328,17 +2269,10 @@ function SaleView({
   );
   const customerSuggestions = matchingCustomers.slice(0, 8);
   const selectedRecord = customers.find((item) => item.id === selectedCustomer);
-  const familyOptions = uniqueFamilies(customers);
-  const relatives = familyMembersOf(customers, familyName).filter(
-    (item) => item.id !== selectedCustomer,
-  );
   const chooseCustomer = (id) => {
     setSelectedCustomer(id);
     const record = customers.find((item) => item.id === id);
     setCustomerQuery(record?.name || "");
-    setFamilyName(record?.family || "");
-    setRelation(record?.relation || "Estudiante");
-    setPayerId("self");
   };
   return (
     <section className="sale-layout">
@@ -2467,7 +2401,6 @@ function SaleView({
               onChange={(event) => {
                 setCustomerQuery(event.target.value);
                 setSelectedCustomer("");
-                setPayerId("self");
               }}
               placeholder="Buscar por nombre, carnet o familia"
               aria-label="Buscar cliente por nombre, carnet o familia"
@@ -2516,90 +2449,13 @@ function SaleView({
               ))}
             </div>
           )}
-          <div className="family-link">
-            <label>
-              Vincular a familia
-              <input
-                name="family"
-                list="sale-family-options"
-                value={familyName}
-                onChange={(event) => {
-                  setFamilyName(event.target.value);
-                  setPayerId("self");
-                }}
-                placeholder="Ej. Familia Pérez"
-              />
-              <datalist id="sale-family-options">
-                {familyOptions.map((family) => (
-                  <option value={family} key={family} />
-                ))}
-              </datalist>
-            </label>
-            <label>
-              Parentesco del cliente
-              <select
-                name="relation"
-                value={relation}
-                onChange={(event) => setRelation(event.target.value)}
-              >
-                {familyRelations.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Quién paga
-              <select
-                name="payer"
-                value={payerId}
-                onChange={(event) => setPayerId(event.target.value)}
-              >
-                <option value="self">
-                  {selectedRecord
-                    ? `El mismo cliente (${selectedRecord.name})`
-                    : "El mismo cliente"}
-                </option>
-                {relatives.map((member) => (
-                  <option value={member.id} key={member.id}>
-                    {member.name}
-                    {member.relation ? ` · ${member.relation}` : " · Familiar"}
-                  </option>
-                ))}
-                <option value="new">Registrar padre, madre o tutor</option>
-              </select>
-            </label>
-            {payerId === "new" && (
-              <>
-                <label>
-                  Nombre de quien paga
-                  <input
-                    required
-                    name="payerName"
-                    placeholder="Nombre del padre, madre o tutor"
-                  />
-                </label>
-                <label>
-                  Parentesco de quien paga
-                  <select name="payerRelation" defaultValue="Padre">
-                    {payerRelations.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            )}
-            {(familyName || selectedRecord?.family) && (
-              <p className="form-note">
-                {selectedRecord?.name || "Este cliente"} quedará en{" "}
-                {familyName || selectedRecord?.family}
-                {payerId === "self"
-                  ? "."
-                  : payerId === "new"
-                    ? " y el pago se registrará a nombre del familiar."
-                    : ` y paga ${relatives.find((item) => item.id === payerId)?.name || "un familiar"}.`}
-              </p>
-            )}
-          </div>
+          {selectedRecord && (
+            <p className="selected-customer-note">
+              Datos del cliente: {selectedRecord.name}
+              {selectedRecord.carnet ? ` · Carnet ${selectedRecord.carnet}` : ""}
+              {selectedRecord.phone ? ` · ${selectedRecord.phone}` : ""}
+            </p>
+          )}
           <PaymentFields />
           <div className="total-line">
             <span>Total a cobrar</span>
@@ -3797,21 +3653,9 @@ function ReceiptModal({ sale, onClose, onVoid }) {
         </p>
         {needsSignature && (
           <div className="receipt-signature">
-            <p className="receipt-acknowledgement">
-              Recibí conforme el monto indicado en este comprobante.
-            </p>
             <div className="signature-fields">
-              <div className="signature-line">
-                <span>Nombre completo</span>
-              </div>
-              <div className="signature-line">
-                <span>C.I.</span>
-              </div>
               <div className="signature-line signature-wide">
                 <span>Firma de quien recibe</span>
-              </div>
-              <div className="signature-line">
-                <span>Fecha</span>
               </div>
             </div>
           </div>
