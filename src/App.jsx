@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -40,14 +40,29 @@ import {
 } from "./lib/supabase";
 import "./App.css";
 
-const navItems = [
+
+function printWithImprovedFormat() {
+  const style = document.createElement("style");
+  style.textContent = `
+    @page { margin: 12mm; }
+    @media print {
+      body { background: #fff !important; color: #111 !important; }
+      button, input, select, textarea { display: none !important; }
+      a { color: inherit !important; text-decoration: none !important; }
+    }
+  `;
+  document.head.appendChild(style);
+  const cleanup = () => { style.remove(); window.removeEventListener("afterprint", cleanup); };
+  window.addEventListener("afterprint", cleanup);
+  printWithImprovedFormat();
+}const navItems = [
   ["Resumen", LayoutDashboard],
   ["Nueva venta", ShoppingCart],
   ["Inventario", Archive],
   ["Clientes", UsersRound],
   ["Historial", BarChart3],
   ["Caja", WalletCards],
-  ["Préstamos", ClipboardList],
+  ["PrÃ©stamos", ClipboardList],
 ];
 const money = (value) => `Bs. ${Number(value).toFixed(2)}`;
 const familyRelations = ["Estudiante", "Padre", "Madre", "Tutor", "Otro"];
@@ -138,7 +153,7 @@ function printElement(selector, kind = "receipt") {
         );
   printWindow.document.open();
   printWindow.document.write(
-    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr" ? "auto" : "80mm auto"};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif}.qr-print-only svg{display:block;width:210px;height:210px}.receipt-modal{width:80mm;max-width:80mm;padding:4mm;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-modal h2{font-size:18px}.receipt-modal p,.receipt-modal small{font-size:10px}.receipt-logo{width:34px;height:34px;object-fit:contain}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#176c67;margin:5px 0 0}.receipt-signature{page-break-inside:avoid}</style></head><body>${content}</body></html>`,
+    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr" ? "auto" : "80mm auto"};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif;color:#17212b}.qr-print-only svg{display:block;width:210px;height:210px}.receipt-modal{width:72mm;max-width:72mm;padding:0;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-top{display:flex;align-items:center;gap:8px;background:#f7faf8;border-bottom:2px solid #1118a8;box-shadow:inset 4px 0 0 #e30613;padding:8px 6px 10px}.receipt-top>span{display:flex;flex:1;flex-direction:column;gap:3px}.receipt-top strong{display:block;font-size:12px;line-height:1.15}.receipt-top small{display:block;color:#1118a8;font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.receipt-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}.receipt-number{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:11px 0 9px;border-bottom:1px solid #e2e5ed;font-size:10px}.receipt-number span{font-weight:600}.receipt-number small{text-align:right;font-size:8px;line-height:1.3}.receipt-lines{display:flex;flex-direction:column}.receipt-lines>div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #e2e5ed;font-size:10px;line-height:1.3}.receipt-lines>div>span{min-width:0}.receipt-lines strong{display:block}.receipt-lines small{display:block;color:#667085;font-size:8px;margin-top:2px}.receipt-lines b{white-space:nowrap;font-size:10px}.receipt-total{display:flex;justify-content:space-between;align-items:center;padding:12px 0 9px;border-bottom:1px solid #e2e5ed}.receipt-total span{font-size:11px}.receipt-total strong{color:#176c67;font-size:18px}.receipt-note{margin:10px 0 0;text-align:center;color:#667085;font-size:8px!important;line-height:1.45}.receipt-signature{page-break-inside:avoid;margin-top:14px;padding-top:10px;border-top:1px solid #e2e5ed}.signature-fields{display:block}.signature-line{position:relative;min-height:38px;border-bottom:1px solid #17212b;padding-top:24px}.signature-line span{position:absolute;top:6px;left:0;color:#667085;font-size:8px}.receipt-footer{display:flex;flex-direction:column;gap:3px;margin-top:14px;padding-top:8px;border-top:1px solid #e2e5ed;text-align:center;color:#667085;font-size:8px}.receipt-footer strong{color:#1118a8;font-size:9px;letter-spacing:.06em}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#1118a8;margin:5px 0 0}</style></head><body>${content}</body></html>`,
   );
   printWindow.document.close();
   printWindow.focus();
@@ -384,7 +399,7 @@ function App() {
     return () => window.removeEventListener("open-material-qr", openQr);
   }, []);
   useEffect(() => {
-    if (activeNav !== "Préstamos") return undefined;
+    if (activeNav !== "PrÃ©stamos") return undefined;
     const tools = document.createElement("div");
     tools.className = "loan-floating-actions";
     const addButton = document.createElement("button");
@@ -394,8 +409,8 @@ function App() {
       const name = window.prompt("Nombre del material prestable");
       if (!name?.trim()) return;
       const category =
-        window.prompt("Categoría del material", "Tecnología") || "Otros";
-      const location = window.prompt("Ubicación", "Depósito A") || "Depósito A";
+        window.prompt("CategorÃ­a del material", "TecnologÃ­a") || "Otros";
+      const location = window.prompt("UbicaciÃ³n", "DepÃ³sito A") || "DepÃ³sito A";
       const material = {
         id: `MAT-${String(materials.length + 1).padStart(3, "0")}`,
         name: name.trim(),
@@ -407,11 +422,11 @@ function App() {
       };
       setMaterials((current) => [...current, material]);
       setSelectedQr(material);
-      showToast("Objeto añadido y QR generado");
+      showToast("Objeto aÃ±adido y QR generado");
     };
     const scanButton = document.createElement("button");
     scanButton.className = "secondary-button small";
-    scanButton.textContent = "QR Registrar préstamo";
+    scanButton.textContent = "QR Registrar prÃ©stamo";
     scanButton.onclick = () => {
       setLoanScan(true);
       setScanValue("");
@@ -422,13 +437,13 @@ function App() {
     return () => tools.remove();
   }, [activeNav, materials.length]);
   useEffect(() => {
-    if (activeNav !== "Préstamos") return undefined;
+    if (activeNav !== "PrÃ©stamos") return undefined;
     const panel = document.querySelector(".loans-layout .panel");
     if (!panel) return undefined;
     const searchBox = document.createElement("div");
     searchBox.className = "loan-search search-box";
     searchBox.innerHTML =
-      '<span aria-hidden="true">⌕</span><input placeholder="Buscar objeto, código o ubicación" />';
+      '<span aria-hidden="true">âŒ•</span><input placeholder="Buscar objeto, cÃ³digo o ubicaciÃ³n" />';
     const input = searchBox.querySelector("input");
     const filter = () => {
       const query = input.value.toLowerCase();
@@ -480,7 +495,7 @@ function App() {
             setScanValue("");
             return;
           }
-          showToast("Código de producto no registrado");
+          showToast("CÃ³digo de producto no registrado");
         },
         () => {},
       )
@@ -513,7 +528,7 @@ function App() {
           )
         : [...current, { ...product, quantity: 1 }],
     );
-    showToast(`${product.name} añadido a la venta`);
+    showToast(`${product.name} aÃ±adido a la venta`);
   };
   const updateQuantity = (id, quantity) =>
     setCart((current) =>
@@ -612,8 +627,8 @@ function App() {
   };
   const voidSale = (sale) => {
     if (!sale || sale.status === "Anulada")
-      return showToast("Este recibo ya está anulado");
-    if (!window.confirm(`¿Anular el recibo ${sale.id}? Se devolverá el stock.`))
+      return showToast("Este recibo ya estÃ¡ anulado");
+    if (!window.confirm(`Â¿Anular el recibo ${sale.id}? Se devolverÃ¡ el stock.`))
       return;
     const voided = {
       ...sale,
@@ -637,7 +652,7 @@ function App() {
         {
           id: `AN-${sale.id}`,
           type: "Egreso",
-          concept: `Anulación ${sale.id}`,
+          concept: `AnulaciÃ³n ${sale.id}`,
           amount: sale.total,
           cashAmount: sale.cashAmount,
           qrAmount: sale.qrAmount,
@@ -660,7 +675,7 @@ function App() {
       setScanValue("");
       return;
     }
-    showToast("Código no registrado");
+    showToast("CÃ³digo no registrado");
   };
   const handleLoanScan = (value = scanValue) => {
     const material = materials.find(
@@ -668,7 +683,7 @@ function App() {
     );
     if (!material) return showToast("QR de material no registrado");
     if (material.status !== "Disponible")
-      return showToast("Ese material no está disponible");
+      return showToast("Ese material no estÃ¡ disponible");
     setLoanScan(false);
     setScanValue("");
     setSelectedLoanMaterial(material);
@@ -691,12 +706,12 @@ function App() {
       unit: data.get("unit") || "und.",
     };
     if (products.some((item) => sameProduct(item, product))) {
-      showToast("Ese producto ya está registrado");
+      showToast("Ese producto ya estÃ¡ registrado");
       return;
     }
     setProducts((current) => [...current, product]);
     setModal(null);
-    showToast("Producto añadido al inventario");
+    showToast("Producto aÃ±adido al inventario");
   };
   const _addMaterial = (event) => {
     event.preventDefault();
@@ -713,7 +728,7 @@ function App() {
     setMaterials((current) => [...current, material]);
     setModal(null);
     setSelectedQr(material);
-    showToast("Objeto añadido y QR generado");
+    showToast("Objeto aÃ±adido y QR generado");
   };
   const editProduct = (event) => {
     event.preventDefault();
@@ -743,7 +758,7 @@ function App() {
     const quantity = Number(data.get("quantity"));
     const operation = data.get("operation");
     if (!quantity || quantity <= 0)
-      return showToast("Ingresa una cantidad válida");
+      return showToast("Ingresa una cantidad vÃ¡lida");
     if (operation === "Salida" && quantity > editingProduct.stock)
       return showToast("La salida supera el stock disponible");
     const date = new Date().toISOString();
@@ -829,7 +844,7 @@ function App() {
             id: `M-${Date.now()}`,
             type: "Egreso",
             kind: "Egreso",
-            concept: `Adelanto pedido ${order.id} · ${supplier}`,
+            concept: `Adelanto pedido ${order.id} Â· ${supplier}`,
             amount: paid,
             cashAmount: paid,
             qrAmount: 0,
@@ -886,7 +901,7 @@ function App() {
           id: `M-${Date.now()}`,
           type: "Egreso",
           kind: "Egreso",
-          concept: `Pago pedido ${order.id} · ${order.supplier}`,
+          concept: `Pago pedido ${order.id} Â· ${order.supplier}`,
           amount: extraPayment,
           cashAmount: extraPayment,
           qrAmount: 0,
@@ -896,7 +911,7 @@ function App() {
       }));
     }
     setModal(null);
-    showToast(`Recepción de ${order.id} registrada`);
+    showToast(`RecepciÃ³n de ${order.id} registrada`);
   };
   const importCsv = (event, type) => {
     const file = event.target.files?.[0];
@@ -995,7 +1010,7 @@ function App() {
     const rawType = data.get("type");
     const amount = Number(data.get("amount"));
     const concept = String(data.get("concept") || "").trim();
-    if (!amount || amount <= 0) return showToast("Ingresa un monto válido");
+    if (!amount || amount <= 0) return showToast("Ingresa un monto vÃ¡lido");
     if (!concept) return showToast("Escribe el concepto del movimiento");
     const payment = data.get("payment");
     const movementType =
@@ -1056,7 +1071,7 @@ function App() {
       setLoans((current) => [
         {
           id: `L-${Date.now()}`,
-          action: "Devolución",
+          action: "DevoluciÃ³n",
           materialId: material.id,
           material: material.name,
           teacherId: teacher?.id || "",
@@ -1066,7 +1081,7 @@ function App() {
         },
         ...current,
       ]);
-      showToast("Devolución registrada");
+      showToast("DevoluciÃ³n registrada");
     } else {
       setMaterials((current) =>
         current.map((item) =>
@@ -1083,7 +1098,7 @@ function App() {
       setLoans((current) => [
         {
           id: `L-${Date.now()}`,
-          action: "Préstamo",
+          action: "PrÃ©stamo",
           materialId: material.id,
           material: material.name,
           teacherId: teacher.id,
@@ -1093,7 +1108,7 @@ function App() {
         },
         ...current,
       ]);
-      showToast("Préstamo registrado");
+      showToast("PrÃ©stamo registrado");
     }
   };
   const saveManualLoan = (event) => {
@@ -1139,7 +1154,7 @@ function App() {
   }, {});
   const stats = [
     {
-      label: "Ventas del día",
+      label: "Ventas del dÃ­a",
       value: money(
         summarySales.reduce((sum, sale) => sum + sale.total, 0),
       ),
@@ -1172,7 +1187,7 @@ function App() {
       tone: "orange",
     },
     {
-      label: "Préstamos activos",
+      label: "PrÃ©stamos activos",
       value: materials.filter((item) => item.status === "Prestado").length,
       note: "Material de profesores",
       icon: ClipboardList,
@@ -1210,7 +1225,7 @@ function App() {
         <div className="workspace-switch">
           <span className="workspace-avatar">C</span>
           <span>
-            <small>Institución</small>
+            <small>InstituciÃ³n</small>
             <strong>Vida y Verdad Caranavi</strong>
           </span>
           <ChevronDown size={15} />
@@ -1224,12 +1239,12 @@ function App() {
           <button
             type="button"
             onClick={() => {
-              setActiveNav("Configuración");
+              setActiveNav("ConfiguraciÃ³n");
               setMenuOpen(false);
             }}
           >
             <Settings size={18} />
-            Configuración
+            ConfiguraciÃ³n
           </button>
           <div className="help-box">
             <ShieldCheck size={19} />
@@ -1237,7 +1252,7 @@ function App() {
               <strong>Datos protegidos</strong>
               <span>
                 {isSupabaseConfigured
-                  ? "Sincronización en línea"
+                  ? "SincronizaciÃ³n en lÃ­nea"
                   : "Guardado local activo"}
               </span>
             </div>
@@ -1258,7 +1273,7 @@ function App() {
             type="button"
             className="mobile-menu"
             onClick={() => setMenuOpen((current) => !current)}
-            aria-label="Abrir menú"
+            aria-label="Abrir menÃº"
           >
             <Menu size={20} />
           </button>
@@ -1283,7 +1298,7 @@ function App() {
         <div className="page-content">
           <section className="welcome-row">
             <div>
-              <p className="eyebrow">GESTIÓN COMERCIAL · VIDA Y VERDAD CARANAVI</p>
+              <p className="eyebrow">GESTIÃ“N COMERCIAL Â· VIDA Y VERDAD CARANAVI</p>
               <h1>
                 {activeNav === "Nueva venta"
                   ? "Punto de venta"
@@ -1291,7 +1306,7 @@ function App() {
               </h1>
               <p className="subtitle">
                 {activeNav === "Nueva venta"
-                  ? "Registra una venta rápida para las familias del colegio."
+                  ? "Registra una venta rÃ¡pida para las familias del colegio."
                   : "Todo lo que necesitas para operar la tienda escolar."}
               </p>
             </div>
@@ -1314,7 +1329,7 @@ function App() {
                     <strong className="date-range-title">Buscar por rango de fechas</strong>
                     <span className="date-filter-badge">
                       <CalendarRange size={13} />
-                      {summaryStartDate || summaryEndDate ? "Rango activo" : "Todo el período"}
+                      {summaryStartDate || summaryEndDate ? "Rango activo" : "Todo el perÃ­odo"}
                     </span>
                     {(summaryStartDate || summaryEndDate) && (
                       <button
@@ -1365,7 +1380,7 @@ function App() {
                       <span>{group}</span>
                       <strong>{money(summary.total)}</strong>
                       <small>
-                        Efectivo {money(summary.cash)} · QR {money(summary.qr)}
+                        Efectivo {money(summary.cash)} Â· QR {money(summary.qr)}
                       </small>
                     </div>
                   );
@@ -1389,7 +1404,7 @@ function App() {
                 <div className="panel">
                   <PanelHeader
                     title="Ventas recientes"
-                    detail="Últimos comprobantes emitidos"
+                    detail="Ãšltimos comprobantes emitidos"
                     action={
                       <button
                         className="text-button"
@@ -1406,7 +1421,7 @@ function App() {
                 </div>
                 <div className="panel alert-panel">
                   <PanelHeader
-                    title="Atención requerida"
+                    title="AtenciÃ³n requerida"
                     detail="Inventario y caja"
                   />
                   <div className="alert-list">
@@ -1432,7 +1447,7 @@ function App() {
                       </span>
                       <span>
                         <strong>Arqueo de caja pendiente</strong>
-                        <small>Último corte: no registrado hoy</small>
+                        <small>Ãšltimo corte: no registrado hoy</small>
                       </span>
                     </div>
                   </div>
@@ -1535,7 +1550,7 @@ function App() {
               onMovement={() => setModal("movement")}
             />
           )}
-          {activeNav === "Préstamos" && (
+          {activeNav === "PrÃ©stamos" && (
             <LoansView
               materials={materials}
               loans={loans}
@@ -1547,8 +1562,8 @@ function App() {
               onEdit={(material) => {
                 const name = window.prompt("Nombre del objeto", material.name);
                 if (!name?.trim()) return;
-                const category = window.prompt("Categoría", material.category) || material.category;
-                const location = window.prompt("Ubicación", material.location) || material.location;
+                const category = window.prompt("CategorÃ­a", material.category) || material.category;
+                const location = window.prompt("UbicaciÃ³n", material.location) || material.location;
                 setMaterials((current) => current.map((item) => item.id === material.id ? { ...item, name: name.trim(), category, location } : item));
                 showToast("Objeto actualizado");
               }}
@@ -1556,7 +1571,7 @@ function App() {
               onAddTeacher={() => setModal("teacher")}
             />
           )}
-          {activeNav === "Configuración" && (
+          {activeNav === "ConfiguraciÃ³n" && (
             <SettingsView
               onImportProducts={(event) => importCsv(event, "products")}
               onImportCustomers={(event) => importCsv(event, "customers")}
@@ -1619,11 +1634,11 @@ function App() {
             <div className="modal-icon">
               <QrCode size={22} />
             </div>
-            <h2>{loanScan ? "Registrar préstamo" : "Escanear productos"}</h2>
+            <h2>{loanScan ? "Registrar prÃ©stamo" : "Escanear productos"}</h2>
             <p>
               {loanScan
-                ? "Apunta al QR del material para registrar el préstamo."
-                : "Apunta al QR de cada producto; se añadirá al carrito automáticamente."}
+                ? "Apunta al QR del material para registrar el prÃ©stamo."
+                : "Apunta al QR de cada producto; se aÃ±adirÃ¡ al carrito automÃ¡ticamente."}
             </p>
             <div id="qr-reader" />
             <div className="scan-input">
@@ -1641,7 +1656,7 @@ function App() {
             </div>
             <small className="camera-note">
               <Camera size={14} />
-              Se solicitará permiso para usar la cámara
+              Se solicitarÃ¡ permiso para usar la cÃ¡mara
             </small>
           </div>
         </div>
@@ -1663,10 +1678,10 @@ function App() {
                 />
               </label>
               <label>
-                Categoría
+                CategorÃ­a
                 <select name="category">
                   <option>Uniformes</option>
-                  <option>Libros y útiles</option>
+                  <option>Libros y Ãºtiles</option>
                   <option>Fotocopias</option>
                   <option>Tela</option>
                   <option>Otros</option>
@@ -1676,7 +1691,7 @@ function App() {
                 Unidad de venta
                 <select name="unit" defaultValue="und.">
                   <option value="und.">Unidad</option>
-                  <option value="cm">Centímetro lineal</option>
+                  <option value="cm">CentÃ­metro lineal</option>
                   <option value="m">Metro lineal</option>
                   <option value="rollo">Rollo</option>
                 </select>
@@ -1731,7 +1746,7 @@ function App() {
                 />
               </label>
               <label>
-                Categoría
+                CategorÃ­a
                 <input
                   required
                   name="category"
@@ -1764,13 +1779,13 @@ function App() {
                   Unidad de venta
                   <select name="unit" defaultValue={editingProduct?.unit || "und."}>
                     <option value="und.">Unidad</option>
-                    <option value="cm">Centímetro lineal</option>
+                    <option value="cm">CentÃ­metro lineal</option>
                     <option value="m">Metro lineal</option>
                     <option value="rollo">Rollo</option>
                   </select>
                 </label>
                 <label>
-                  Stock mínimo
+                  Stock mÃ­nimo
                   <input
                     required
                     name="minStock"
@@ -1797,7 +1812,7 @@ function App() {
           fields={
             <>
               <p className="form-note">
-                Producto: {editingProduct?.name} · Stock actual:{" "}
+                Producto: {editingProduct?.name} Â· Stock actual:{" "}
                 {editingProduct?.stock}
               </p>
             </>
@@ -1806,7 +1821,7 @@ function App() {
       )}
       {modal === "loan" && (
         <FormModal
-          title="Registrar préstamo"
+          title="Registrar prÃ©stamo"
           icon={ClipboardList}
           onSubmit={saveManualLoan}
           onClose={() => {
@@ -1826,13 +1841,13 @@ function App() {
                   </option>
                   {teachers.map((teacher) => (
                     <option value={teacher.id} key={teacher.id}>
-                      {teacher.name} · {teacher.role}
+                      {teacher.name} Â· {teacher.role}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                Fecha o detalle de devolución (opcional)
+                Fecha o detalle de devoluciÃ³n (opcional)
                 <input name="due" placeholder="Ej. 25/09/2026" />
               </label>
             </>
@@ -1878,7 +1893,7 @@ function App() {
               relation: String(data.get("relation") || "").trim(),
             };
             if (customers.some((item) => sameCustomer(item, customer))) {
-              showToast("Ese cliente ya está registrado");
+              showToast("Ese cliente ya estÃ¡ registrado");
               return;
             }
             setCustomers((current) => [...current, customer]);
@@ -1893,18 +1908,18 @@ function App() {
                 <input required name="name" />
               </label>
               <label>
-                Número de carnet
+                NÃºmero de carnet
                 <input required name="carnet" />
               </label>
               <label>
-                Teléfono (opcional)
+                TelÃ©fono (opcional)
                 <input name="phone" />
               </label>
               <label>
                 Familia (opcional)
                 <input
                   name="family"
-                  placeholder="Ej. Familia Pérez"
+                  placeholder="Ej. Familia PÃ©rez"
                   list="customer-family-options"
                 />
                 <datalist id="customer-family-options">
@@ -1941,7 +1956,7 @@ function App() {
               relation: String(data.get("relation") || "").trim(),
             };
             if (customers.some((item) => item.id !== customer.id && sameCustomer(item, customer))) {
-              showToast("Ese cliente ya está registrado");
+              showToast("Ese cliente ya estÃ¡ registrado");
               return;
             }
             setCustomers((current) => current.map((item) => item.id === customer.id ? customer : item));
@@ -1960,18 +1975,18 @@ function App() {
                 <input required name="name" defaultValue={editingCustomer.name} />
               </label>
               <label>
-                Número de carnet
+                NÃºmero de carnet
                 <input required name="carnet" defaultValue={editingCustomer.carnet} />
               </label>
               <label>
-                Teléfono (opcional)
+                TelÃ©fono (opcional)
                 <input name="phone" defaultValue={editingCustomer.phone} />
               </label>
               <label>
                 Familia (opcional)
                 <input
                   name="family"
-                  placeholder="Ej. Familia Pérez"
+                  placeholder="Ej. Familia PÃ©rez"
                   list="customer-family-options-edit"
                   defaultValue={editingCustomer.family}
                 />
@@ -2019,7 +2034,7 @@ function App() {
                 <input required name="name" />
               </label>
               <label>
-                Área o especialidad
+                Ãrea o especialidad
                 <input required name="role" />
               </label>
             </>
@@ -2106,7 +2121,7 @@ function App() {
                 <input
                   required
                   name="concept"
-                  placeholder="Ej. Donación, servicio, pago de transporte, multa, etc."
+                  placeholder="Ej. DonaciÃ³n, servicio, pago de transporte, multa, etc."
                 />
               </label>
               <label>
@@ -2157,7 +2172,7 @@ function PanelHeader({ title, detail, action }) {
 function SaleList({
   sales,
   onSelect,
-  empty = "Aún no hay comprobantes emitidos.",
+  empty = "AÃºn no hay comprobantes emitidos.",
 }) {
   return sales.length ? (
     <div className="sale-list">
@@ -2174,11 +2189,11 @@ function SaleList({
             <strong>{sale.id}</strong>
             <small>
               {sale.customer}
-              {sale.family ? ` · ${sale.family}` : ""}
+              {sale.family ? ` Â· ${sale.family}` : ""}
               {sale.payer && sale.payer !== sale.customer
-                ? ` · Pagó ${sale.payer}`
+                ? ` Â· PagÃ³ ${sale.payer}`
                 : ""}{" "}
-              ·{" "}
+              Â·{" "}
               {new Date(sale.date).toLocaleString("es-PE", {
                 dateStyle: "short",
                 timeStyle: "short",
@@ -2278,8 +2293,8 @@ function SaleView({
     <section className="sale-layout">
       <div className="panel product-picker">
         <PanelHeader
-          title="Catálogo"
-          detail="Selecciona productos o escanea un código"
+          title="CatÃ¡logo"
+          detail="Selecciona productos o escanea un cÃ³digo"
           action={
             <button className="secondary-button" type="button" onClick={onScan}>
               <QrCode size={16} />
@@ -2293,7 +2308,7 @@ function SaleView({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por nombre o código"
+              placeholder="Buscar por nombre o cÃ³digo"
             />
           </div>
         </div>
@@ -2321,7 +2336,7 @@ function SaleView({
               <span>
                 <strong>{product.name}</strong>
                 <small>
-                  {product.id} · {product.stock} disponibles
+                  {product.id} Â· {product.stock} disponibles
                 </small>
               </span>
               <b>{money(product.price)}</b>
@@ -2347,7 +2362,7 @@ function SaleView({
                 <span>
                   <strong>{item.name}</strong>
                   <small>
-                    {money(item.price)} c/u · Stock restante: {Math.max(0, item.stock - item.quantity)}
+                    {money(item.price)} c/u Â· Stock restante: {Math.max(0, item.stock - item.quantity)}
                   </small>
                   {item.stock - item.quantity <= 0 && (
                     <em className="stock-warning">Stock agotado al emitir</em>
@@ -2389,7 +2404,7 @@ function SaleView({
         ) : (
           <div className="empty-cart">
             <ShoppingCart size={29} />
-            <p>La venta está vacía</p>
+            <p>La venta estÃ¡ vacÃ­a</p>
             <small>Selecciona un producto para comenzar</small>
           </div>
         )}
@@ -2415,9 +2430,9 @@ function SaleView({
                 {matchingCustomers.map((customer) => (
                   <option value={customer.id} key={customer.id}>
                     {customer.name}
-                    {customer.relation ? ` · ${customer.relation}` : ""}
-                    {customer.family ? ` · ${customer.family}` : ""}
-                    {customer.carnet ? ` · Carnet ${customer.carnet}` : ""}
+                    {customer.relation ? ` Â· ${customer.relation}` : ""}
+                    {customer.family ? ` Â· ${customer.family}` : ""}
+                    {customer.carnet ? ` Â· Carnet ${customer.carnet}` : ""}
                   </option>
                 ))}
               </select>
@@ -2443,7 +2458,7 @@ function SaleView({
                   <small>
                     {[customer.carnet && `Carnet ${customer.carnet}`, customer.family, customer.relation]
                       .filter(Boolean)
-                      .join(" · ") || "Cliente registrado"}
+                      .join(" Â· ") || "Cliente registrado"}
                   </small>
                 </button>
               ))}
@@ -2452,8 +2467,8 @@ function SaleView({
           {selectedRecord && (
             <p className="selected-customer-note">
               Datos del cliente: {selectedRecord.name}
-              {selectedRecord.carnet ? ` · Carnet ${selectedRecord.carnet}` : ""}
-              {selectedRecord.phone ? ` · ${selectedRecord.phone}` : ""}
+              {selectedRecord.carnet ? ` Â· Carnet ${selectedRecord.carnet}` : ""}
+              {selectedRecord.phone ? ` Â· ${selectedRecord.phone}` : ""}
             </p>
           )}
           <PaymentFields />
@@ -2581,7 +2596,7 @@ function InventoryView({
       <section className="panel lower-panel">
       <PanelHeader
         title="Inventario de productos"
-        detail="Uniformes, libros, fotocopias y útiles"
+        detail="Uniformes, libros, fotocopias y Ãºtiles"
         action={
           <button className="primary-button small" onClick={onAdd}>
             <Plus size={16} />
@@ -2602,7 +2617,7 @@ function InventoryView({
       <div className="inventory-table">
         <div className="inventory-head inventory-products-head">
           <span>Producto</span>
-          <span>Categoría</span>
+          <span>CategorÃ­a</span>
           <span>Costo compra</span>
           <span>Precio</span>
           <span>Existencia</span>
@@ -2649,7 +2664,7 @@ function InventoryView({
                 <button
                   className="icon-action"
                   onClick={() => onQr(product)}
-                  title="Ver código QR"
+                  title="Ver cÃ³digo QR"
                 >
                   <QrCode size={15} />
                 </button>
@@ -2661,12 +2676,12 @@ function InventoryView({
       <section className="panel lower-panel inventory-report">
         <PanelHeader
           title="Informe de inventario"
-          detail="Existencias, costos, ventas y valorización del período"
+          detail="Existencias, costos, ventas y valorizaciÃ³n del perÃ­odo"
           action={
             <button
               className="secondary-button small"
               type="button"
-              onClick={() => window.print()}
+              onClick={() => printWithImprovedFormat()}
             >
               <FileText size={15} />
               Imprimir informe
@@ -2748,14 +2763,14 @@ function InventoryView({
         {purchaseOrders.length ? purchaseOrders.map((order) => (
           <div className="purchase-order-row" key={order.id}>
             <span>
-              <strong>{order.id} · {order.supplier}</strong>
+              <strong>{order.id} Â· {order.supplier}</strong>
               <small>
-                {order.status} · {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos · Saldo {money(order.balance)}
+                {order.status} Â· {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos Â· Saldo {money(order.balance)}
               </small>
             </span>
             <b>{money(order.total)}</b>
             <button className="secondary-button small" type="button" onClick={() => onReceiveOrder(order)}>
-              Registrar recepción
+              Registrar recepciÃ³n
             </button>
             <button className="icon-action" type="button" title="Imprimir orden" onClick={() => onPrintOrder(order)}>
               <FileText size={15} />
@@ -2784,7 +2799,7 @@ function PurchaseOrderModal({ products, onSubmit, onClose }) {
             <div className="purchase-order-line" key={`${index}-${line.productId}`}>
               <select value={line.productId} onChange={(event) => updateLine(index, "productId", event.target.value)}>
                 <option value="">Producto</option>
-                {products.map((product) => <option value={product.id} key={product.id}>{product.name} · {product.unit || "und."}</option>)}
+                {products.map((product) => <option value={product.id} key={product.id}>{product.name} Â· {product.unit || "und."}</option>)}
               </select>
               <input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} aria-label="Cantidad pedida" />
               <input type="number" min="0" step="0.01" value={line.unitCost} onChange={(event) => updateLine(index, "unitCost", event.target.value)} aria-label="Costo unitario" />
@@ -2792,7 +2807,7 @@ function PurchaseOrderModal({ products, onSubmit, onClose }) {
             </div>
           ))}
         </div>
-        <button type="button" className="secondary-button small" onClick={() => setLines((current) => [...current, { productId: products[0]?.id || "", quantity: 1, unitCost: products[0]?.purchaseCost || 0 }])}><Plus size={14} /> Añadir producto</button>
+        <button type="button" className="secondary-button small" onClick={() => setLines((current) => [...current, { productId: products[0]?.id || "", quantity: 1, unitCost: products[0]?.purchaseCost || 0 }])}><Plus size={14} /> AÃ±adir producto</button>
         <label>Adelanto o pago inicial<input name="paid" type="number" min="0" step="0.01" defaultValue="0" /></label>
         <label>Notas<input name="notes" placeholder="Condiciones o fecha prometida" /></label>
         <input type="hidden" name="items" />
@@ -2809,15 +2824,15 @@ function ReceiveOrderModal({ order, onSubmit, onClose }) {
         <button type="button" className="close-button" onClick={onClose}><X size={18} /></button>
         <div className="modal-icon"><PackagePlus size={22} /></div>
         <h2>Recibir pedido {order.id}</h2>
-        <p className="form-note">Proveedor: {order.supplier}. Registra solo lo que llegó.</p>
+        <p className="form-note">Proveedor: {order.supplier}. Registra solo lo que llegÃ³.</p>
         {order.items.map((item, index) => (
-          <label key={item.productId}>{item.productName} · pedido: {item.quantity} {item.unit}
+          <label key={item.productId}>{item.productName} Â· pedido: {item.quantity} {item.unit}
             <input name={`received-${index}`} type="number" min="0" max={item.quantity} step="0.01" defaultValue={item.received} />
           </label>
         ))}
         <label>Pago adicional<input name="payment" type="number" min="0" step="0.01" defaultValue="0" /></label>
         <input type="hidden" name="orderId" value={order.id} />
-        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button" type="submit"><Check size={17} /> Registrar recepción</button></div>
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button" type="submit"><Check size={17} /> Registrar recepciÃ³n</button></div>
       </form>
     </div>
   );
@@ -2836,7 +2851,7 @@ function PurchaseOrderPrint({ order, onClose }) {
         </div>
         <div className="receipt-total"><span>Total</span><strong>{money(order.total)}</strong></div>
         <p className="receipt-note">Adelanto/pagado: {money(order.paid)}<br />Saldo: {money(order.balance)}<br />{order.notes}</p>
-        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cerrar</button><button className="primary-button" onClick={() => window.print()}><FileText size={16} /> Imprimir</button></div>
+        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cerrar</button><button className="primary-button" onClick={() => printWithImprovedFormat()}><FileText size={16} /> Imprimir</button></div>
       </div>
     </div>
   );
@@ -2852,7 +2867,7 @@ function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
     <section className="panel lower-panel">
       <PanelHeader
         title="Clientes y familias"
-        detail="Carnet, parentesco, compras e importación masiva"
+        detail="Carnet, parentesco, compras e importaciÃ³n masiva"
         action={
           <span className="button-pair">
             <button className="primary-button small" type="button" onClick={onAdd}>
@@ -2872,7 +2887,7 @@ function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
           <Search size={16} />
           <input
             type="search"
-            placeholder="Buscar por nombre, carnet, teléfono o familia"
+            placeholder="Buscar por nombre, carnet, telÃ©fono o familia"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -2886,7 +2901,7 @@ function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
           <span>Cliente</span>
           <span>Familia</span>
           <span>Carnet</span>
-          <span>Teléfono</span>
+          <span>TelÃ©fono</span>
           <span>Compras</span>
           <span>Acciones</span>
         </div>
@@ -2900,7 +2915,7 @@ function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
                 {customer.name}
                 <small>
                   {customer.id}
-                  {customer.relation ? ` · ${customer.relation}` : ""}
+                  {customer.relation ? ` Â· ${customer.relation}` : ""}
                 </small>
               </strong>
             </span>
@@ -3035,7 +3050,7 @@ function HistoryView({
               <span>{group}</span>
               <strong>{money(summary.total)}</strong>
               <small>
-                Efectivo {money(summary.cash)} · QR {money(summary.qr)}
+                Efectivo {money(summary.cash)} Â· QR {money(summary.qr)}
               </small>
             </div>
           );
@@ -3060,7 +3075,7 @@ function HistoryView({
               <strong className="date-range-title">Buscar por rango de fechas</strong>
               <span className="date-filter-badge">
                 <CalendarRange size={13} />
-                {startDate || endDate ? "Rango activo" : "Todo el período"}
+                {startDate || endDate ? "Rango activo" : "Todo el perÃ­odo"}
               </span>
               {(startDate || endDate) && (
                 <button
@@ -3138,16 +3153,16 @@ function HistoryView({
                   </span>
                   <span>
                     <strong>
-                      {entry.kind} · {entry.id}
+                      {entry.kind} Â· {entry.id}
                     </strong>
                     <small>
                       {entry.customer || entry.concept}{" "}
-                      {entry.family ? `· ${entry.family} ` : ""}
+                      {entry.family ? `Â· ${entry.family} ` : ""}
                       {entry.payer && entry.payer !== entry.customer
-                        ? `· Pagó ${entry.payer} `
+                        ? `Â· PagÃ³ ${entry.payer} `
                         : ""}
-                      {entry.carnet ? `· Carnet ${entry.carnet} ` : ""}
-                      ·{" "}
+                      {entry.carnet ? `Â· Carnet ${entry.carnet} ` : ""}
+                      Â·{" "}
                       {new Date(entry.dateValue).toLocaleString("es-BO", {
                         dateStyle: "short",
                         timeStyle: "short",
@@ -3213,8 +3228,8 @@ function SettingsView({
   return (
     <section className="panel lower-panel settings-view">
       <PanelHeader
-        title="Configuración"
-        detail="Carga masiva y estado de conexión"
+        title="ConfiguraciÃ³n"
+        detail="Carga masiva y estado de conexiÃ³n"
       />
       <div className="settings-status">
         <span className={`status-dot ${online ? "" : "borrowed"}`} />
@@ -3222,7 +3237,7 @@ function SettingsView({
         <small>
           {online
             ? "Los cambios se sincronizan entre dispositivos."
-            : "Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para operar en línea."}
+            : "Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para operar en lÃ­nea."}
         </small>
       </div>
       <div className="import-grid">
@@ -3267,7 +3282,7 @@ function CashView({ cash, sales, onClose, onMovement }) {
     <section className="cash-layout">
       <div className="panel cash-main">
         <PanelHeader
-          title="Caja del día"
+          title="Caja del dÃ­a"
           detail="Ventas, ingresos, egresos y arqueo"
           action={
             <span className="button-pair">
@@ -3289,7 +3304,7 @@ function CashView({ cash, sales, onClose, onMovement }) {
           <span>Saldo esperado</span>
           <strong>{money(balance)}</strong>
           <small>
-            Base inicial: {money(cash.opening)} · {sales.length} ventas
+            Base inicial: {money(cash.opening)} Â· {sales.length} ventas
             acumuladas
           </small>
         </div>
@@ -3317,7 +3332,7 @@ function CashView({ cash, sales, onClose, onMovement }) {
         </div>
       </div>
       <div className="panel">
-        <PanelHeader title="Últimos movimientos" detail="Registro de caja" />
+        <PanelHeader title="Ãšltimos movimientos" detail="Registro de caja" />
         {cash.movements.length ? (
           <div className="movement-list">
             {cash.movements.slice(0, 8).map((movement) => (
@@ -3342,8 +3357,8 @@ function CashView({ cash, sales, onClose, onMovement }) {
                 <span>
                   <strong>{movement.concept}</strong>
                   <small>
-                    {movement.payment || "Efectivo"} · Efectivo{" "}
-                    {money(movement.cashAmount || 0)} · QR{" "}
+                    {movement.payment || "Efectivo"} Â· Efectivo{" "}
+                    {money(movement.cashAmount || 0)} Â· QR{" "}
                     {money(movement.qrAmount || 0)}
                   </small>
                 </span>
@@ -3357,7 +3372,7 @@ function CashView({ cash, sales, onClose, onMovement }) {
         ) : (
           <div className="empty-state">
             <Banknote size={28} />
-            <p>Aún no hay movimientos.</p>
+            <p>AÃºn no hay movimientos.</p>
           </div>
         )}
       </div>
@@ -3382,7 +3397,7 @@ function LoansView({
       <div className="panel">
         <PanelHeader
           title="Material prestado a profesores"
-          detail="Objetos institucionales disponibles para préstamo"
+          detail="Objetos institucionales disponibles para prÃ©stamo"
           action={
             <button className="secondary-button" onClick={onAddTeacher}>
               <UsersRound size={16} />
@@ -3399,7 +3414,7 @@ function LoansView({
                 />
                 <strong>{material.name}</strong>
                 <small>
-                  {material.id} · {material.location}
+                  {material.id} Â· {material.location}
                 </small>
               </div>
               <span
@@ -3430,7 +3445,7 @@ function LoansView({
                   className="text-button"
                   onClick={() => onLoan(material)}
                 >
-                  {material.status === "Prestado" ? "Registrar devolución" : "Prestar con QR"}
+                  {material.status === "Prestado" ? "Registrar devoluciÃ³n" : "Prestar con QR"}
                 </button>
                 {material.status === "Disponible" && (
                   <button
@@ -3447,7 +3462,7 @@ function LoansView({
       </div>
       <div className="panel">
         <PanelHeader
-          title="Últimos movimientos"
+          title="Ãšltimos movimientos"
           detail={`${teachers.length} profesores registrados`}
         />
         {loans.length ? (
@@ -3461,7 +3476,7 @@ function LoansView({
                   {loan.action}: {loan.material}
                 </strong>
                 <small>
-                  {loan.teacher} ·{" "}
+                  {loan.teacher} Â·{" "}
                   {new Date(loan.date).toLocaleString("es-PE", {
                     dateStyle: "short",
                     timeStyle: "short",
@@ -3473,7 +3488,7 @@ function LoansView({
         ) : (
           <div className="empty-state">
             <ClipboardList size={28} />
-            <p>Sin movimientos todavía.</p>
+            <p>Sin movimientos todavÃ­a.</p>
           </div>
         )}
       </div>
@@ -3501,7 +3516,7 @@ function FormModal({
         <h2>{title}</h2>
         {stockMode && (
           <label>
-            Operación
+            OperaciÃ³n
             <select
               name="operation"
               value={operation}
@@ -3517,15 +3532,15 @@ function FormModal({
             Motivo
             <select name="reason">
               {operation === "Entrada" ? (
-                <option>Compra o reposición de mercadería</option>
+                <option>Compra o reposiciÃ³n de mercaderÃ­a</option>
               ) : (
                 <>
                   <option>Deterioro</option>
-                  <option>Defecto de fábrica</option>
-                  <option>Daño</option>
+                  <option>Defecto de fÃ¡brica</option>
+                  <option>DaÃ±o</option>
                   <option>Libro incompleto</option>
-                  <option>Pérdida</option>
-                  <option>Donación o retiro autorizado</option>
+                  <option>PÃ©rdida</option>
+                  <option>DonaciÃ³n o retiro autorizado</option>
                   <option>Otro</option>
                 </>
               )}
@@ -3596,7 +3611,7 @@ function ReceiptModal({ sale, onClose, onVoid }) {
             <strong>Vida y Verdad Caranavi</strong>
             <small>
               {movementTitle}
-              {!isMovement && sale.status === "Anulada" ? " · ANULADO" : ""}
+              {!isMovement && sale.status === "Anulada" ? " Â· ANULADO" : ""}
             </small>
           </span>
         </div>
@@ -3636,17 +3651,17 @@ function ReceiptModal({ sale, onClose, onVoid }) {
           <strong>{money(sale.amount || sale.total)}</strong>
         </div>
         <p className="receipt-note">
-          Pago: {sale.payment || "Efectivo"} · Efectivo{" "}
-          {money(sale.cashAmount || 0)} · QR {money(sale.qrAmount || 0)}
+          Pago: {sale.payment || "Efectivo"} Â· Efectivo{" "}
+          {money(sale.cashAmount || 0)} Â· QR {money(sale.qrAmount || 0)}
           <br />
           {sale.customer || sale.concept}{" "}
-          {sale.relation ? `· ${sale.relation} ` : ""}
-          {sale.family ? `· ${sale.family} ` : ""}
-          {sale.carnet ? `· Carnet ${sale.carnet}` : ""}
+          {sale.relation ? `Â· ${sale.relation} ` : ""}
+          {sale.family ? `Â· ${sale.family} ` : ""}
+          {sale.carnet ? `Â· Carnet ${sale.carnet}` : ""}
           {sale.payer && sale.payer !== sale.customer ? (
             <>
               <br />
-              Pagó: {sale.payer}
+              PagÃ³: {sale.payer}
               {sale.payerRelation ? ` (${sale.payerRelation})` : ""}
             </>
           ) : null}
@@ -3662,10 +3677,10 @@ function ReceiptModal({ sale, onClose, onVoid }) {
         )}
         <div className="receipt-footer">
           <strong>COLEGIO VIDA Y VERDAD</strong>
-          <span>Servicio, integridad y mayordomía cristiana</span>
+          <span>Servicio, integridad y mayordomÃ­a cristiana</span>
         </div>
         <div className="modal-actions">
-          <button className="secondary-button" onClick={() => window.print()}>
+          <button className="secondary-button" onClick={() => printWithImprovedFormat()}>
             <Download size={16} />
             Reimprimir
           </button>
@@ -3693,9 +3708,9 @@ function QrModal({ item, onClose }) {
         <button className="close-button" onClick={onClose}>
           <X size={18} />
         </button>
-        <span className="eyebrow">IDENTIFICACIÓN DE PRODUCTO</span>
+        <span className="eyebrow">IDENTIFICACIÃ“N DE PRODUCTO</span>
         <h2>{item.name}</h2>
-        <p>{item.id} · Escanea para añadir al carrito.</p>
+        <p>{item.id} Â· Escanea para aÃ±adir al carrito.</p>
         <div className="qr-print-only">
           <QRCodeSVG
             value={item.id}
@@ -3705,7 +3720,7 @@ function QrModal({ item, onClose }) {
           />
         </div>
         <div className="modal-actions">
-          <button className="secondary-button" onClick={() => window.print()}>
+          <button className="secondary-button" onClick={() => printWithImprovedFormat()}>
             <Download size={16} />
             Imprimir etiqueta
           </button>
@@ -3718,3 +3733,4 @@ function QrModal({ item, onClose }) {
   );
 }
 export default App;
+
