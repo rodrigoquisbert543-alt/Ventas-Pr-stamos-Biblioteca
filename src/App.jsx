@@ -42,19 +42,7 @@ import "./App.css";
 
 
 function printWithImprovedFormat() {
-  const style = document.createElement("style");
-  style.textContent = `
-    @page { margin: 12mm; }
-    @media print {
-      body { background: #fff !important; color: #111 !important; }
-      button, input, select, textarea { display: none !important; }
-      a { color: inherit !important; text-decoration: none !important; }
-    }
-  `;
-  document.head.appendChild(style);
-  const cleanup = () => { style.remove(); window.removeEventListener("afterprint", cleanup); };
-  window.addEventListener("afterprint", cleanup);
-  printWithImprovedFormat();
+  printElement(".receipt-modal");
 }const navItems = [
   ["Resumen", LayoutDashboard],
   ["Nueva venta", ShoppingCart],
@@ -62,7 +50,7 @@ function printWithImprovedFormat() {
   ["Clientes", UsersRound],
   ["Historial", BarChart3],
   ["Caja", WalletCards],
-  ["PrÃ©stamos", ClipboardList],
+  ["Préstamos", ClipboardList],
 ];
 const money = (value) => `Bs. ${Number(value).toFixed(2)}`;
 const familyRelations = ["Estudiante", "Padre", "Madre", "Tutor", "Otro"];
@@ -399,7 +387,7 @@ function App() {
     return () => window.removeEventListener("open-material-qr", openQr);
   }, []);
   useEffect(() => {
-    if (activeNav !== "PrÃ©stamos") return undefined;
+    if (activeNav !== "Préstamos") return undefined;
     const tools = document.createElement("div");
     tools.className = "loan-floating-actions";
     const addButton = document.createElement("button");
@@ -409,8 +397,8 @@ function App() {
       const name = window.prompt("Nombre del material prestable");
       if (!name?.trim()) return;
       const category =
-        window.prompt("CategorÃ­a del material", "TecnologÃ­a") || "Otros";
-      const location = window.prompt("UbicaciÃ³n", "DepÃ³sito A") || "DepÃ³sito A";
+        window.prompt("Categoría del material", "Tecnología") || "Otros";
+      const location = window.prompt("Ubicación", "Depósito A") || "Depósito A";
       const material = {
         id: `MAT-${String(materials.length + 1).padStart(3, "0")}`,
         name: name.trim(),
@@ -422,11 +410,11 @@ function App() {
       };
       setMaterials((current) => [...current, material]);
       setSelectedQr(material);
-      showToast("Objeto aÃ±adido y QR generado");
+      showToast("Objeto añadido y QR generado");
     };
     const scanButton = document.createElement("button");
     scanButton.className = "secondary-button small";
-    scanButton.textContent = "QR Registrar prÃ©stamo";
+    scanButton.textContent = "QR Registrar préstamo";
     scanButton.onclick = () => {
       setLoanScan(true);
       setScanValue("");
@@ -437,13 +425,13 @@ function App() {
     return () => tools.remove();
   }, [activeNav, materials.length]);
   useEffect(() => {
-    if (activeNav !== "PrÃ©stamos") return undefined;
+    if (activeNav !== "Préstamos") return undefined;
     const panel = document.querySelector(".loans-layout .panel");
     if (!panel) return undefined;
     const searchBox = document.createElement("div");
     searchBox.className = "loan-search search-box";
     searchBox.innerHTML =
-      '<span aria-hidden="true">âŒ•</span><input placeholder="Buscar objeto, cÃ³digo o ubicaciÃ³n" />';
+      '<span aria-hidden="true">⌕</span><input placeholder="Buscar objeto, código o ubicación" />';
     const input = searchBox.querySelector("input");
     const filter = () => {
       const query = input.value.toLowerCase();
@@ -495,7 +483,7 @@ function App() {
             setScanValue("");
             return;
           }
-          showToast("CÃ³digo de producto no registrado");
+          showToast("Código de producto no registrado");
         },
         () => {},
       )
@@ -528,7 +516,7 @@ function App() {
           )
         : [...current, { ...product, quantity: 1 }],
     );
-    showToast(`${product.name} aÃ±adido a la venta`);
+    showToast(`${product.name} añadido a la venta`);
   };
   const updateQuantity = (id, quantity) =>
     setCart((current) =>
@@ -627,8 +615,8 @@ function App() {
   };
   const voidSale = (sale) => {
     if (!sale || sale.status === "Anulada")
-      return showToast("Este recibo ya estÃ¡ anulado");
-    if (!window.confirm(`Â¿Anular el recibo ${sale.id}? Se devolverÃ¡ el stock.`))
+      return showToast("Este recibo ya está anulado");
+    if (!window.confirm(`¿Anular el recibo ${sale.id}? Se devolverá el stock.`))
       return;
     const voided = {
       ...sale,
@@ -652,7 +640,7 @@ function App() {
         {
           id: `AN-${sale.id}`,
           type: "Egreso",
-          concept: `AnulaciÃ³n ${sale.id}`,
+          concept: `Anulación ${sale.id}`,
           amount: sale.total,
           cashAmount: sale.cashAmount,
           qrAmount: sale.qrAmount,
@@ -675,7 +663,7 @@ function App() {
       setScanValue("");
       return;
     }
-    showToast("CÃ³digo no registrado");
+    showToast("Código no registrado");
   };
   const handleLoanScan = (value = scanValue) => {
     const material = materials.find(
@@ -683,7 +671,7 @@ function App() {
     );
     if (!material) return showToast("QR de material no registrado");
     if (material.status !== "Disponible")
-      return showToast("Ese material no estÃ¡ disponible");
+      return showToast("Ese material no está disponible");
     setLoanScan(false);
     setScanValue("");
     setSelectedLoanMaterial(material);
@@ -706,12 +694,12 @@ function App() {
       unit: data.get("unit") || "und.",
     };
     if (products.some((item) => sameProduct(item, product))) {
-      showToast("Ese producto ya estÃ¡ registrado");
+      showToast("Ese producto ya está registrado");
       return;
     }
     setProducts((current) => [...current, product]);
     setModal(null);
-    showToast("Producto aÃ±adido al inventario");
+    showToast("Producto añadido al inventario");
   };
   const _addMaterial = (event) => {
     event.preventDefault();
@@ -728,7 +716,7 @@ function App() {
     setMaterials((current) => [...current, material]);
     setModal(null);
     setSelectedQr(material);
-    showToast("Objeto aÃ±adido y QR generado");
+    showToast("Objeto añadido y QR generado");
   };
   const editProduct = (event) => {
     event.preventDefault();
@@ -758,7 +746,7 @@ function App() {
     const quantity = Number(data.get("quantity"));
     const operation = data.get("operation");
     if (!quantity || quantity <= 0)
-      return showToast("Ingresa una cantidad vÃ¡lida");
+      return showToast("Ingresa una cantidad válida");
     if (operation === "Salida" && quantity > editingProduct.stock)
       return showToast("La salida supera el stock disponible");
     const date = new Date().toISOString();
@@ -844,7 +832,7 @@ function App() {
             id: `M-${Date.now()}`,
             type: "Egreso",
             kind: "Egreso",
-            concept: `Adelanto pedido ${order.id} Â· ${supplier}`,
+            concept: `Adelanto pedido ${order.id} · ${supplier}`,
             amount: paid,
             cashAmount: paid,
             qrAmount: 0,
@@ -901,7 +889,7 @@ function App() {
           id: `M-${Date.now()}`,
           type: "Egreso",
           kind: "Egreso",
-          concept: `Pago pedido ${order.id} Â· ${order.supplier}`,
+          concept: `Pago pedido ${order.id} · ${order.supplier}`,
           amount: extraPayment,
           cashAmount: extraPayment,
           qrAmount: 0,
@@ -911,7 +899,7 @@ function App() {
       }));
     }
     setModal(null);
-    showToast(`RecepciÃ³n de ${order.id} registrada`);
+    showToast(`Recepción de ${order.id} registrada`);
   };
   const importCsv = (event, type) => {
     const file = event.target.files?.[0];
@@ -1098,7 +1086,7 @@ function App() {
       setLoans((current) => [
         {
           id: `L-${Date.now()}`,
-          action: "PrÃ©stamo",
+          action: "Préstamo",
           materialId: material.id,
           material: material.name,
           teacherId: teacher.id,
@@ -1108,7 +1096,7 @@ function App() {
         },
         ...current,
       ]);
-      showToast("PrÃ©stamo registrado");
+      showToast("Préstamo registrado");
     }
   };
   const saveManualLoan = (event) => {
@@ -1298,7 +1286,7 @@ function App() {
         <div className="page-content">
           <section className="welcome-row">
             <div>
-              <p className="eyebrow">GESTIÃ“N COMERCIAL Â· VIDA Y VERDAD CARANAVI</p>
+              <p className="eyebrow">GESTIÓN COMERCIAL · VIDA Y VERDAD CARANAVI</p>
               <h1>
                 {activeNav === "Nueva venta"
                   ? "Punto de venta"
@@ -1306,7 +1294,7 @@ function App() {
               </h1>
               <p className="subtitle">
                 {activeNav === "Nueva venta"
-                  ? "Registra una venta rÃ¡pida para las familias del colegio."
+                  ? "Registra una venta rápida para las familias del colegio."
                   : "Todo lo que necesitas para operar la tienda escolar."}
               </p>
             </div>
@@ -1380,7 +1368,7 @@ function App() {
                       <span>{group}</span>
                       <strong>{money(summary.total)}</strong>
                       <small>
-                        Efectivo {money(summary.cash)} Â· QR {money(summary.qr)}
+                        Efectivo {money(summary.cash)} · QR {money(summary.qr)}
                       </small>
                     </div>
                   );
@@ -1550,7 +1538,7 @@ function App() {
               onMovement={() => setModal("movement")}
             />
           )}
-          {activeNav === "PrÃ©stamos" && (
+          {activeNav === "Préstamos" && (
             <LoansView
               materials={materials}
               loans={loans}
@@ -1562,8 +1550,8 @@ function App() {
               onEdit={(material) => {
                 const name = window.prompt("Nombre del objeto", material.name);
                 if (!name?.trim()) return;
-                const category = window.prompt("CategorÃ­a", material.category) || material.category;
-                const location = window.prompt("UbicaciÃ³n", material.location) || material.location;
+                const category = window.prompt("Categoría", material.category) || material.category;
+                const location = window.prompt("Ubicación", material.location) || material.location;
                 setMaterials((current) => current.map((item) => item.id === material.id ? { ...item, name: name.trim(), category, location } : item));
                 showToast("Objeto actualizado");
               }}
@@ -1571,7 +1559,7 @@ function App() {
               onAddTeacher={() => setModal("teacher")}
             />
           )}
-          {activeNav === "ConfiguraciÃ³n" && (
+          {activeNav === "Configuración" && (
             <SettingsView
               onImportProducts={(event) => importCsv(event, "products")}
               onImportCustomers={(event) => importCsv(event, "customers")}
@@ -1634,11 +1622,11 @@ function App() {
             <div className="modal-icon">
               <QrCode size={22} />
             </div>
-            <h2>{loanScan ? "Registrar prÃ©stamo" : "Escanear productos"}</h2>
+            <h2>{loanScan ? "Registrar préstamo" : "Escanear productos"}</h2>
             <p>
               {loanScan
-                ? "Apunta al QR del material para registrar el prÃ©stamo."
-                : "Apunta al QR de cada producto; se aÃ±adirÃ¡ al carrito automÃ¡ticamente."}
+                ? "Apunta al QR del material para registrar el préstamo."
+                : "Apunta al QR de cada producto; se añadirá al carrito automáticamente."}
             </p>
             <div id="qr-reader" />
             <div className="scan-input">
@@ -1841,7 +1829,7 @@ function App() {
                   </option>
                   {teachers.map((teacher) => (
                     <option value={teacher.id} key={teacher.id}>
-                      {teacher.name} Â· {teacher.role}
+                      {teacher.name} · {teacher.role}
                     </option>
                   ))}
                 </select>
