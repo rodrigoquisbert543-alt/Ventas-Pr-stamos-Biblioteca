@@ -148,7 +148,7 @@ function printElement(selector, kind = "receipt") {
         );
   printWindow.document.open();
   printWindow.document.write(
-    `<!doctype html><html><head><title>Imprimir</title><style>@page{size:${kind === "qr" ? "auto" : "80mm auto"};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif}.qr-print-only svg{display:block;width:210px;height:210px}.receipt-modal{width:80mm;max-width:80mm;padding:4mm;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-modal h2{font-size:18px}.receipt-modal p,.receipt-modal small{font-size:10px}</style></head><body>${content}</body></html>`,
+    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr" ? "auto" : "80mm auto"};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif}.qr-print-only svg{display:block;width:210px;height:210px}.receipt-modal{width:80mm;max-width:80mm;padding:4mm;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-modal h2{font-size:18px}.receipt-modal p,.receipt-modal small{font-size:10px}.receipt-logo{width:34px;height:34px;object-fit:contain}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#176c67;margin:5px 0 0}.receipt-signature{page-break-inside:avoid}</style></head><body>${content}</body></html>`,
   );
   printWindow.document.close();
   printWindow.focus();
@@ -246,6 +246,7 @@ function App() {
   const [selectedQr, setSelectedQr] = useState(null);
   const [selectedLoanMaterial, setSelectedLoanMaterial] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
   const [editingPurchaseOrder, setEditingPurchaseOrder] = useState(null);
   const [printPurchaseOrder, setPrintPurchaseOrder] = useState(null);
   const [scanValue, setScanValue] = useState("");
@@ -1564,6 +1565,10 @@ function App() {
               sales={sales}
               onImport={(event) => importCsv(event, "customers")}
               onAdd={() => setModal("customer")}
+              onEdit={(customer) => {
+                setEditingCustomer(customer);
+                setModal("editCustomer");
+              }}
             />
           )}
           {activeNav === "Historial" && (
@@ -1969,6 +1974,74 @@ function App() {
               <label>
                 Parentesco
                 <select name="relation" defaultValue="Estudiante">
+                  {familyRelations.map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+            </>
+          }
+        />
+      )}
+      {modal === "editCustomer" && editingCustomer && (
+        <FormModal
+          title="Editar cliente"
+          icon={UserRound}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            const customer = {
+              ...editingCustomer,
+              name: data.get("name"),
+              carnet: data.get("carnet"),
+              phone: data.get("phone") || "",
+              family: String(data.get("family") || "").trim(),
+              relation: String(data.get("relation") || "").trim(),
+            };
+            if (customers.some((item) => item.id !== customer.id && sameCustomer(item, customer))) {
+              showToast("Ese cliente ya está registrado");
+              return;
+            }
+            setCustomers((current) => current.map((item) => item.id === customer.id ? customer : item));
+            setEditingCustomer(null);
+            setModal(null);
+            showToast("Datos del cliente actualizados");
+          }}
+          onClose={() => {
+            setEditingCustomer(null);
+            setModal(null);
+          }}
+          fields={
+            <>
+              <label>
+                Nombre del cliente / familia
+                <input required name="name" defaultValue={editingCustomer.name} />
+              </label>
+              <label>
+                Número de carnet
+                <input required name="carnet" defaultValue={editingCustomer.carnet} />
+              </label>
+              <label>
+                Teléfono (opcional)
+                <input name="phone" defaultValue={editingCustomer.phone} />
+              </label>
+              <label>
+                Familia (opcional)
+                <input
+                  name="family"
+                  placeholder="Ej. Familia Pérez"
+                  list="customer-family-options-edit"
+                  defaultValue={editingCustomer.family}
+                />
+                <datalist id="customer-family-options-edit">
+                  {uniqueFamilies(customers).map((family) => (
+                    <option value={family} key={family} />
+                  ))}
+                </datalist>
+              </label>
+              <label>
+                Parentesco
+                <select name="relation" defaultValue={editingCustomer.relation || "Estudiante"}>
                   {familyRelations.map((item) => (
                     <option key={item}>{item}</option>
                   ))}
@@ -2914,7 +2987,13 @@ function PurchaseOrderPrint({ order, onClose }) {
     </div>
   );
 }
-function CustomerView({ customers, sales, onImport, onAdd }) {
+function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
+  const [query, setQuery] = useState("");
+  const filteredCustomers = customers.filter((customer) =>
+    `${customer.name} ${customer.id} ${customer.carnet} ${customer.phone || ""} ${customer.family || ""} ${customer.relation || ""}`
+      .toLowerCase()
+      .includes(query.toLowerCase().trim()),
+  );
   return (
     <section className="panel lower-panel">
       <PanelHeader
@@ -2934,16 +3013,31 @@ function CustomerView({ customers, sales, onImport, onAdd }) {
           </span>
         }
       />
+      <div className="customer-search-row" style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0" }}>
+        <div className="search-box">
+          <Search size={16} />
+          <input
+            type="search"
+            placeholder="Buscar por nombre, carnet, teléfono o familia"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <span className="customer-result-count" style={{ color: "var(--muted)", fontSize: 10, whiteSpace: "nowrap" }}>
+          {filteredCustomers.length} clientes
+        </span>
+      </div>
       <div className="inventory-table">
-        <div className="inventory-head customers-head">
+        <div className="inventory-head customers-head" style={{ gridTemplateColumns: "2fr 1.3fr .9fr .9fr .7fr 35px" }}>
           <span>Cliente</span>
           <span>Familia</span>
           <span>Carnet</span>
           <span>Teléfono</span>
           <span>Compras</span>
+          <span>Acciones</span>
         </div>
-        {customers.map((customer) => (
-          <div className="inventory-row customers-row" key={customer.id}>
+        {filteredCustomers.map((customer) => (
+          <div className="inventory-row customers-row" key={customer.id} style={{ gridTemplateColumns: "2fr 1.3fr .9fr .9fr .7fr 35px" }}>
             <span className="product-cell">
               <span className="product-icon coral">
                 <UserRound size={17} />
@@ -2968,6 +3062,16 @@ function CustomerView({ customers, sales, onImport, onAdd }) {
                     sale.customer === customer.name,
                 ).length
               }
+            </span>
+            <span className="inventory-actions">
+              <button
+                className="icon-action"
+                type="button"
+                title="Editar cliente"
+                onClick={() => onEdit(customer)}
+              >
+                <Settings size={15} />
+              </button>
             </span>
           </div>
         ))}
@@ -3622,6 +3726,7 @@ function ReceiptModal({ sale, onClose, onVoid }) {
         : isMovement
           ? `Comprobante de ${movementKind.toLowerCase()}`
           : "Recibo de venta";
+    const needsSignature = movementKind === "Egreso" || movementKind === "Otro egreso";
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -3632,9 +3737,7 @@ function ReceiptModal({ sale, onClose, onVoid }) {
           <X size={18} />
         </button>
         <div className="receipt-top">
-          <span className="brand-mark">
-            <BookOpen size={18} />
-          </span>
+          <img className="receipt-logo" src="/logo-vida-verdad.jpg" alt="Logo Vida y Verdad" />
           <span>
             <strong>Vida y Verdad Caranavi</strong>
             <small>
@@ -3694,6 +3797,31 @@ function ReceiptModal({ sale, onClose, onVoid }) {
             </>
           ) : null}
         </p>
+        {needsSignature && (
+          <div className="receipt-signature">
+            <p className="receipt-acknowledgement">
+              Recibí conforme el monto indicado en este comprobante.
+            </p>
+            <div className="signature-fields">
+              <div className="signature-line">
+                <span>Nombre completo</span>
+              </div>
+              <div className="signature-line">
+                <span>C.I.</span>
+              </div>
+              <div className="signature-line signature-wide">
+                <span>Firma de quien recibe</span>
+              </div>
+              <div className="signature-line">
+                <span>Fecha</span>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="receipt-footer">
+          <strong>COLEGIO VIDA Y VERDAD</strong>
+          <span>Servicio, integridad y mayordomía cristiana</span>
+        </div>
         <div className="modal-actions">
           <button className="secondary-button" onClick={() => window.print()}>
             <Download size={16} />
