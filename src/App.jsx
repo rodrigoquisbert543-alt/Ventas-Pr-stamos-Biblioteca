@@ -2581,6 +2581,37 @@ function InventoryView({
   );
   return (
     <section className="inventory-stack">
+      <section className="panel lower-panel purchase-orders">
+        <PanelHeader
+          title="Pedidos a proveedores"
+          detail="Control de pedidos, entregas parciales y pagos"
+          action={
+            <button className="primary-button small" type="button" onClick={onNewOrder}>
+              <Plus size={15} /> Nuevo pedido
+            </button>
+          }
+        />
+        {purchaseOrders.length ? purchaseOrders.map((order) => (
+          <div className="purchase-order-row" key={order.id}>
+            <span>
+              <strong>{order.id} · {order.supplier}</strong>
+              <small>
+                {order.status} · {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos · Saldo {money(order.balance)}
+              </small>
+            </span>
+            <b>{money(order.total)}</b>
+            <button className="secondary-button small" type="button" onClick={() => onReceiveOrder(order)}>
+              Registrar recepción
+            </button>
+            <button className="secondary-button small purchase-order-print-button" type="button" onClick={() => onPrintOrder(order)}>
+              <FileText size={15} />
+              Imprimir nota
+            </button>
+          </div>
+        )) : (
+          <div className="empty-state"><ClipboardList size={26} /><p>No hay pedidos registrados.</p></div>
+        )}
+      </section>
       <section className="panel lower-panel">
       <PanelHeader
         title="Inventario de productos"
@@ -2737,37 +2768,6 @@ function InventoryView({
           <span>Costo de lo vendido: <strong>{money(reportTotals.soldCostValue)}</strong></span>
           <span>Margen bruto estimado: <strong>{money(reportTotals.grossMarginValue)}</strong></span>
         </div>
-      </section>
-      <section className="panel lower-panel purchase-orders">
-        <PanelHeader
-          title="Pedidos a proveedores"
-          detail="Control de pedidos, entregas parciales y pagos"
-          action={
-            <button className="primary-button small" type="button" onClick={onNewOrder}>
-              <Plus size={15} /> Nuevo pedido
-            </button>
-          }
-        />
-        {purchaseOrders.length ? purchaseOrders.map((order) => (
-          <div className="purchase-order-row" key={order.id}>
-            <span>
-              <strong>{order.id} · {order.supplier}</strong>
-              <small>
-                {order.status} · {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos · Saldo {money(order.balance)}
-              </small>
-            </span>
-            <b>{money(order.total)}</b>
-            <button className="secondary-button small" type="button" onClick={() => onReceiveOrder(order)}>
-              Registrar recepción
-            </button>
-            <button className="secondary-button small purchase-order-print-button" type="button" onClick={() => onPrintOrder(order)}>
-              <FileText size={15} />
-              Imprimir nota
-            </button>
-          </div>
-        )) : (
-          <div className="empty-state"><ClipboardList size={26} /><p>No hay pedidos registrados.</p></div>
-        )}
       </section>
     </section>
   );
