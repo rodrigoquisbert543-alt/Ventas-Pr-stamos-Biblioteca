@@ -1258,9 +1258,7 @@ function App() {
     <div className="app-shell">
       <aside className={`sidebar ${menuOpen ? "mobile-open" : ""}`}>
         <div className="brand">
-          <span className="brand-mark">
-            <BookOpen size={20} />
-          </span>
+          <img className="brand-logo" src="/logo-vida-verdad.jpg" alt="Logo Vida y Verdad" />
           <span>
             Vida y Verdad<span className="brand-dot">.</span>
           </span>
@@ -2974,7 +2972,7 @@ function PurchaseOrderPrint({ order, onClose }) {
     <div className="modal-backdrop">
       <div className="modal receipt-modal purchase-order-print" onClick={(event) => event.stopPropagation()}>
         <button className="close-button" onClick={onClose}><X size={18} /></button>
-        <div className="receipt-top"><span className="brand-mark"><ClipboardList size={18} /></span><span><strong>Vida y Verdad Caranavi</strong><small>Orden de pedido a proveedor</small></span></div>
+        <div className="receipt-top"><img className="receipt-logo" src="/logo-vida-verdad.jpg" alt="Logo Vida y Verdad" /><span><strong>Vida y Verdad Caranavi</strong><small>Orden de pedido a proveedor</small></span></div>
         <div className="receipt-number"><span>{order.id}</span><small>{new Date(order.date).toLocaleString("es-BO")}</small></div>
         <p className="receipt-note"><strong>Proveedor:</strong> {order.supplier}<br />Estado: {order.status}</p>
         <div className="receipt-lines">
