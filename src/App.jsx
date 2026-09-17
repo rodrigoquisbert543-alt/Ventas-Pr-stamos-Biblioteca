@@ -653,6 +653,22 @@ function App() {
     setSelectedSale(voided);
     showToast(`Recibo ${sale.id} anulado y stock restaurado`);
   };
+  const voidMovement = (movement) => {
+    if (!movement || movement.status === "Anulada")
+      return showToast("Este comprobante ya está anulado");
+    if (!window.confirm(`¿Anular el comprobante ${movement.id}?`)) return;
+    const voided = { ...movement, status: "Anulada", voidedAt: new Date().toISOString() };
+    setCash((current) => ({
+      ...current,
+      movements: current.movements.map((item) =>
+        item.id === movement.id ? voided : item,
+      ),
+    }));
+    setSelectedSale(voided);
+    showToast(`Comprobante ${movement.id} anulado`);
+  };
+  const voidEntry = (entry) =>
+    entry.kind === "Venta" ? voidSale(entry) : voidMovement(entry);
   const handleScan = () => {
     if (loanScan) return loanScanHandlerRef.current?.();
     const product = products.find(
@@ -1164,7 +1180,7 @@ function App() {
           cash.movements.reduce(
             (sum, movement) =>
               sum +
-              (movement.type === "Ingreso"
+              (movement.status === "Anulada" ? 0 : movement.type === "Ingreso"
                 ? movement.amount
                 : -movement.amount),
             0,
@@ -1528,6 +1544,7 @@ function App() {
               setStartDate={setHistoryStartDate}
               setEndDate={setHistoryEndDate}
               onSelect={setSelectedSale}
+              onVoid={voidEntry}
             />
           )}
           {activeNav === "Caja" && (
@@ -2065,7 +2082,7 @@ function App() {
                     cash.movements.reduce(
                       (sum, movement) =>
                         sum +
-                        (movement.type === "Ingreso"
+                        (movement.status === "Anulada" ? 0 : movement.type === "Ingreso"
                           ? movement.amount
                           : -movement.amount),
                       0,
@@ -2955,6 +2972,7 @@ function HistoryView({
   filter,
   setFilter,
   onSelect,
+  onVoid,
   startDate,
   endDate,
   setStartDate,
@@ -3124,10 +3142,15 @@ function HistoryView({
             entries.map((entry) => {
               const isOutgoing = ["Egreso", "Otro egreso"].includes(entry.kind);
               return (
-                <button
+                <div
                   className="history-row history-button"
                   key={`${entry.kind}-${entry.id}`}
                   onClick={() => onSelect(entry)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") onSelect(entry);
+                  }}
                 >
                   <span
                     className={`history-icon ${isOutgoing ? "out" : "in"}`}
@@ -3162,7 +3185,18 @@ function HistoryView({
                     {isOutgoing ? "-" : "+"}
                     {money(entry.amount || entry.total)}
                   </b>
-                </button>
+                  <button
+                    type="button"
+                    className="history-void-button"
+                    disabled={entry.status === "Anulada"}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onVoid(entry);
+                    }}
+                  >
+                    {entry.status === "Anulada" ? "Anulado" : "Anular"}
+                  </button>
+                </div>
               );
             })
           ) : (
@@ -3264,7 +3298,11 @@ function CashView({ cash, sales, onClose, onMovement }) {
     cash.movements.reduce(
       (sum, movement) =>
         sum +
-        (movement.type === "Ingreso" ? movement.amount : -movement.amount),
+        (movement.status === "Anulada"
+          ? 0
+          : movement.type === "Ingreso"
+            ? movement.amount
+            : -movement.amount),
       0,
     );
   return (
@@ -3677,6 +3715,12 @@ function ReceiptModal({ sale, onClose, onVoid }) {
             <button className="secondary-button" onClick={() => onVoid(sale)}>
               <Trash2 size={16} />
               Anular recibo
+            </button>
+          )}
+          {isMovement && sale.status !== "Anulada" && (
+            <button className="secondary-button" onClick={() => onVoid(sale)}>
+              <Trash2 size={16} />
+              Anular comprobante
             </button>
           )}
           <button className="primary-button" onClick={onClose}>
