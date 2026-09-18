@@ -10,6 +10,7 @@ create table if not exists products (
   stock numeric(12,2) not null default 0,
   min_stock integer not null default 5,
   unit text not null default 'und.',
+  section text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -34,6 +35,7 @@ alter table sales add column if not exists qr_amount numeric(12,2) not null defa
 alter table sales add column if not exists status text not null default 'Vigente';
 alter table sales add column if not exists voided_at timestamptz;
 alter table products add column if not exists purchase_cost numeric(12,2) not null default 0;
+alter table products add column if not exists section text not null default '';
 alter table products alter column stock type numeric(12,2) using stock::numeric;
 
 create table if not exists materials (

@@ -54,6 +54,17 @@ function printWithImprovedFormat() {
 ];
 const money = (value) => `Bs. ${Number(value).toFixed(2)}`;
 const familyRelations = ["Estudiante", "Padre", "Madre", "Tutor", "Otro"];
+const reportSections = [
+  "LIBROS",
+  "AGENDAS",
+  "POLERAS",
+  "BLUSAS Y CAMISAS",
+  "TELA",
+  "DEPORTIVOS",
+  "VARIOS",
+];
+const sectionLabel = (value = "") =>
+  value ? `${value.charAt(0)}${value.slice(1).toLowerCase()}` : "";
 function nextCustomerId(list) {
   const used = new Set(list.map((item) => item.id));
   let index = list.length + 1;
@@ -703,6 +714,7 @@ function App() {
       id: `PRD-${String(products.length + 1).padStart(3, "0")}`,
       name: data.get("name"),
       category: data.get("category"),
+      section: reportGroup(data.get("category"), data.get("section")),
       price: Number(data.get("price")),
       purchaseCost: Number(data.get("purchaseCost") || 0),
       stock: Number(data.get("stock")),
@@ -744,6 +756,7 @@ function App() {
               ...product,
               name: data.get("name"),
               category: data.get("category"),
+              section: reportGroup(data.get("category"), data.get("section")),
               price: Number(data.get("price")),
               purchaseCost: Number(data.get("purchaseCost") || 0),
               unit: data.get("unit") || product.unit || "und.",
@@ -977,6 +990,10 @@ function App() {
               `PRD-${String(products.length + index + 1).padStart(3, "0")}`,
             name: row.nombre || row.name || row.producto || "",
             category: row.categoria || row.category || "Otros",
+            section: reportGroup(
+              row.categoria || row.category || "Otros",
+              row.seccion || row.section || "",
+            ),
             price: Number(row.precio || row.price || row.precio_de_venta || 0),
             purchaseCost: Number(
               row.costo_de_compra || row.purchase_cost || row.purchaseCost || 0,
@@ -1142,7 +1159,7 @@ function App() {
     sale.items.forEach((item) => {
       const product =
         products.find((candidate) => candidate.id === item.id) || item;
-      const group = reportGroup(product.category);
+      const group = reportGroup(product.category, product.section);
       const itemValue = item.price * item.quantity;
       const share = sale.total ? itemValue / sale.total : 0;
       const cash = sale.cashAmount * share;
@@ -1369,15 +1386,7 @@ function App() {
                 </div>
               </div>
               <section className="report-grid" style={{ marginBottom: 20 }}>
-                {[
-                  "LIBROS",
-                  "AGENDAS",
-                  "POLERAS",
-                  "BLUSAS Y CAMISAS",
-                  "TELA",
-                  "DEPORTIVOS",
-                  "VARIOS",
-                ].map((group) => {
+                {reportSections.map((group) => {
                   const summary = summaryGroups[group] || { total: 0, cash: 0, qr: 0 };
                   return (
                     <div className="report-card" key={group}>
@@ -1584,8 +1593,8 @@ function App() {
               onExportProducts={() =>
                 downloadCsv(
                   "productos.csv",
-                  ["id", "nombre", "categoria", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
-                  products.map((item) => [item.id, item.name, item.category, item.purchaseCost || 0, item.price, item.stock, item.minStock, item.unit]),
+                  ["id", "nombre", "categoria", "seccion", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
+                  products.map((item) => [item.id, item.name, item.category, reportGroup(item.category, item.section), item.purchaseCost || 0, item.price, item.stock, item.minStock, item.unit]),
                 )
               }
               onExportCustomers={() =>
@@ -1604,7 +1613,7 @@ function App() {
               }
               onDownloadTemplate={(type) => {
                 const templates = {
-                  products: ["id", "nombre", "categoria", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
+                  products: ["id", "nombre", "categoria", "seccion", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
                   customers: ["id", "nombre", "carnet", "telefono", "familia", "parentesco"],
                   materials: ["id", "nombre", "categoria", "ubicacion", "estado", "prestado_a", "devolucion"],
                 };
@@ -1693,6 +1702,23 @@ function App() {
                 </select>
               </label>
               <label>
+                Sección del resumen
+                <select required name="section" defaultValue="">
+                  <option value="" disabled>
+                    Selecciona la sección del resumen
+                  </option>
+                  {reportSections.map((item) => (
+                    <option value={item} key={item}>
+                      {sectionLabel(item)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="form-note">
+                La sección define en qué tarjeta de Resumen e Historial se
+                sumarán las ventas de este producto.
+              </p>
+              <label>
                 Unidad de venta
                 <select name="unit" defaultValue="und.">
                   <option value="und.">Unidad</option>
@@ -1758,6 +1784,27 @@ function App() {
                   defaultValue={editingProduct?.category}
                 />
               </label>
+              <label>
+                Sección del resumen
+                <select
+                  required
+                  name="section"
+                  defaultValue={
+                    editingProduct?.section ||
+                    reportGroup(editingProduct?.category || "")
+                  }
+                >
+                  {reportSections.map((item) => (
+                    <option value={item} key={item}>
+                      {sectionLabel(item)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="form-note">
+                Cambia la sección si el producto no está sumando en la tarjeta
+                correcta de Resumen e Historial.
+              </p>
               <div className="form-row">
                 <label>
                   Precio de venta
@@ -2653,7 +2700,7 @@ function InventoryView({
       <div className="inventory-table">
         <div className="inventory-head inventory-products-head">
           <span>Producto</span>
-          <span>Categoría</span>
+          <span>Categoría / sección</span>
           <span>Costo compra</span>
           <span>Precio</span>
           <span>Existencia</span>
@@ -2674,7 +2721,12 @@ function InventoryView({
                   <small>{product.id}</small>
                 </strong>
               </span>
-              <span>{product.category}</span>
+              <span>
+                {product.category}
+                <small className="report-section-tag">
+                  {reportGroup(product.category, product.section)}
+                </small>
+              </span>
               <span>{money(product.purchaseCost || 0)}</span>
               <span>{money(product.price)}</span>
               <span
@@ -2954,8 +3006,10 @@ function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
     </section>
   );
 }
-const reportGroup = (category = "") => {
-  const value = category.toLowerCase();
+const reportGroup = (category = "", section = "") => {
+  const explicit = String(section || "").trim().toUpperCase();
+  if (reportSections.includes(explicit)) return explicit;
+  const value = normalizedValue(category);
   if (value.includes("libro")) return "LIBROS";
   if (value.includes("agenda")) return "AGENDAS";
   if (value.includes("polera") || value.includes("polo")) return "POLERAS";
@@ -3025,7 +3079,7 @@ function HistoryView({
     sale.items.forEach((item) => {
       const product =
         products.find((candidate) => candidate.id === item.id) || item;
-      const group = reportGroup(product.category);
+      const group = reportGroup(product.category, product.section);
       const itemValue = item.price * item.quantity;
       const share = sale.total ? itemValue / sale.total : 0;
       const cash = sale.cashAmount * share;
@@ -3042,15 +3096,7 @@ function HistoryView({
   return (
     <section className="history-stack">
       <div className="report-grid">
-        {[
-          "LIBROS",
-          "AGENDAS",
-          "POLERAS",
-          "BLUSAS Y CAMISAS",
-          "TELA",
-          "DEPORTIVOS",
-          "VARIOS",
-        ].map((group) => {
+        {reportSections.map((group) => {
           const summary = groups[group] || { total: 0, cash: 0, qr: 0 };
           return (
             <div className="report-card" key={group}>
@@ -3267,7 +3313,7 @@ function SettingsView({
         <CsvDataCard
           icon={PackagePlus}
           title="Productos para la venta"
-          description="id, nombre, categoria, costo_de_compra, precio, stock, stock_minimo, unidad"
+          description="id, nombre, categoria, seccion, costo_de_compra, precio, stock, stock_minimo, unidad"
           onImport={onImportProducts}
           onExport={onExportProducts}
           onTemplate={() => onDownloadTemplate("products")}

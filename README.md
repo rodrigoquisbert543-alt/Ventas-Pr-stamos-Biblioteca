@@ -11,6 +11,23 @@ Sistema para ventas escolares en bolivianos, inventario, recibos, caja, QR y con
 
 Sin variables de Supabase la aplicación continúa funcionando con almacenamiento local. Cuando están configuradas, sincroniza productos, ventas, materiales, préstamos, profesores y movimientos de caja entre dispositivos.
 
+### Actualización de la tabla `products`
+
+Si tu proyecto de Supabase ya estaba creado, ejecuta esta sentencia en el SQL Editor para habilitar la sección de resumen por producto:
+
+```sql
+alter table products add column if not exists section text not null default '';
+```
+
+## Secciones del resumen
+
+Cada producto guarda una **sección del resumen** (`section`), que es la tarjeta donde se acumulan sus ventas en las vistas *Resumen* e *Historial*: Libros, Agendas, Poleras, Blusas y camisas, Tela, Deportivos y Varios.
+
+- Al registrar un producto (`Nuevo producto`) la sección es obligatoria: elige la que corresponde para que la venta no caiga en *Varios*.
+- Al editar un producto (`Editar producto`) puedes corregir la sección; las ventas ya registradas se reacomodan automáticamente al recalcular el resumen.
+- En inventario, la columna *Categoría / sección* muestra la sección asignada bajo la categoría.
+- Los CSV de productos (plantilla, exportación e importación) incluyen la columna `seccion`. Si viene vacía o no coincide con una sección válida, se deduce por palabras clave de la categoría (`libro`, `agenda`, `polera`, `blusa`, `camisa`, `tela`, `deport`); si no hay coincidencia el producto queda en `VARIOS`.
+
 ## Desarrollo
 
 ```bash
