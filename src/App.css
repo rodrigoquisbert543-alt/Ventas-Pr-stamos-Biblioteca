@@ -52,3 +52,48 @@
 .modal-scroll-body::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
 }
+/* ============================================
+   CALCULADORA DE CAMBIO
+   ============================================ */
+.change-calculator {
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fbf9;
+  border: 1px solid var(--line);
+}
+
+.change-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.change-result.ok {
+  background: #e8f5f0;
+  color: #1f7a5e;
+  border: 1px solid #b8e0d0;
+}
+
+.change-result.pending {
+  background: #fff4e6;
+  color: #b5651d;
+  border: 1px solid #ffd9a8;
+}
+
+.change-result span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+}
+
+.change-result strong {
+  font: 700 16px 'Space Grotesk';
+  color: inherit;
+}
