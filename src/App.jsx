@@ -1658,87 +1658,88 @@ function App() {
         </div>
       )}
       {modal === "product" && (
-        <FormModal
-          title="Nuevo producto"
-          icon={PackagePlus}
-          onSubmit={addProduct}
-          onClose={() => setModal(null)}
-          fields={
-            <>
+      <FormModal
+        title="Nuevo producto"
+        icon={PackagePlus}
+        onSubmit={addProduct}
+        onClose={() => setModal(null)}
+        fields={
+          <>
+            <label>
+              Nombre
+              <input
+                required
+                name="name"
+                placeholder="Ej. Polo institucional"
+              />
+            </label>
+            <label>
+              Categoría
+              <select name="category">
+                <option>Uniformes</option>
+                <option>Libros y útiles</option>
+                <option>Fotocopias</option>
+                <option>Tela</option>
+                <option>Otros</option>
+              </select>
+            </label>
+            <label>
+              Sección del resumen
+              <select required name="section" defaultValue="">
+                <option value="" disabled>
+                  Selecciona la sección del resumen
+                </option>
+                {reportSections.map((item) => (
+                  <option value={item} key={item}>
+                    {sectionLabel(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="form-note">
+              La sección define en qué tarjeta de Resumen e Historial se
+              sumarán las ventas de este producto.
+            </p>
+            <label>
+              Unidad de venta
+              <select name="unit" defaultValue="und.">
+                <option value="und.">Unidad</option>
+                <option value="cm">Centímetro lineal</option>
+                <option value="m">Metro lineal</option>
+                <option value="rollo">Rollo</option>
+              </select>
+            </label>
+            <div className="form-row">
               <label>
-                Nombre
+                Costo de compra
                 <input
-                  required
-                  name="name"
-                  placeholder="Ej. Polo institucional"
+                  name="purchaseCost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
                 />
               </label>
               <label>
-                Categoría
-                <select name="category">
-                  <option>Uniformes</option>
-                  <option>Libros y útiles</option>
-                  <option>Fotocopias</option>
-                  <option>Tela</option>
-                  <option>Otros</option>
-                </select>
+                Precio
+                <input
+                  required
+                  name="price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                />
               </label>
               <label>
-                Sección del resumen
-                <select required name="section" defaultValue="">
-                  <option value="" disabled>
-                    Selecciona la sección del resumen
-                  </option>
-                  {reportSections.map((item) => (
-                    <option value={item} key={item}>
-                      {sectionLabel(item)}
-                    </option>
-                  ))}
-                </select>
+                Stock inicial
+                <input required name="stock" type="number" min="0" placeholder="0" />
               </label>
-              <p className="form-note">
-                La sección define en qué tarjeta de Resumen e Historial se
-                sumarán las ventas de este producto.
-              </p>
-              <label>
-                Unidad de venta
-                <select name="unit" defaultValue="und.">
-                  <option value="und.">Unidad</option>
-                  <option value="cm">Centímetro lineal</option>
-                  <option value="m">Metro lineal</option>
-                  <option value="rollo">Rollo</option>
-                </select>
-              </label>
-              <div className="form-row">
-                <label>
-                  Precio
-                  <input
-                    required
-                    name="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                  />
-                </label>
-                <label>
-                  Costo de compra
-                  <input
-                    name="purchaseCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                  />
-                </label>
-                <label>
-                  Stock inicial
-                  <input required name="stock" type="number" min="0" />
-                </label>
-              </div>
-            </>
-          }
-        />
-      )}
+            </div>
+          </>
+        }
+      />
+    )}
       {modal === "editProduct" && (
       <FormModal
         title="Editar producto"
@@ -2253,6 +2254,7 @@ function PaymentFields({ total = 0 }) {
   const receivedNumber = Number(received) || 0;
   const change = receivedNumber - total;
   const showCashField = payment === "Efectivo" || payment === "Ambos";
+  const showQrField = payment === "QR" || payment === "Ambos";
 
   return (
     <>
@@ -2287,7 +2289,7 @@ function PaymentFields({ total = 0 }) {
             />
           </label>
         )}
-        {(payment === "QR" || payment === "Ambos") && (
+        {showQrField && (
           <label>
             QR
             <input
@@ -2296,11 +2298,15 @@ function PaymentFields({ total = 0 }) {
               step="0.01"
               min="0"
               placeholder="0.00"
+              readOnly={payment === "QR"}
+              defaultValue={payment === "QR" ? total : ""}
+              key={`qr-${payment}-${total}`}
             />
           </label>
         )}
       </div>
 
+      {/* Calculadora de cambio: solo si hay efectivo involucrado */}
       {showCashField && total > 0 && (
         <div className="change-calculator">
           <label>
