@@ -1740,99 +1740,99 @@ function App() {
         />
       )}
       {modal === "editProduct" && (
-        <FormModal
-          title="Editar producto"
-          icon={Archive}
-          onSubmit={editProduct}
-          onClose={() => {
-            setEditingProduct(null);
-            setModal(null);
-          }}
-          fields={
-            <>
+      <FormModal
+        title="Editar producto"
+        icon={Archive}
+        onSubmit={editProduct}
+        onClose={() => {
+          setEditingProduct(null);
+          setModal(null);
+        }}
+        fields={
+          <>
+            <label>
+              Nombre
+              <input
+                required
+                name="name"
+                defaultValue={editingProduct?.name}
+              />
+            </label>
+            <label>
+              Categoría
+              <input
+                required
+                name="category"
+                defaultValue={editingProduct?.category}
+              />
+            </label>
+            <label>
+              Sección del resumen
+              <select
+                required
+                name="section"
+                defaultValue={
+                  editingProduct?.section ||
+                  reportGroup(editingProduct?.category || "")
+                }
+              >
+                {reportSections.map((item) => (
+                  <option value={item} key={item}>
+                    {sectionLabel(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="form-note">
+              Cambia la sección si el producto no está sumando en la tarjeta
+              correcta de Resumen e Historial.
+            </p>
+            <div className="form-row">
               <label>
-                Nombre
+                Costo de compra
                 <input
-                  required
-                  name="name"
-                  defaultValue={editingProduct?.name}
+                  name="purchaseCost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={editingProduct?.purchaseCost || 0}
                 />
               </label>
               <label>
-                Categoría
+                Precio de venta
                 <input
                   required
-                  name="category"
-                  defaultValue={editingProduct?.category}
+                  name="price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={editingProduct?.price}
                 />
               </label>
               <label>
-                Sección del resumen
-                <select
-                  required
-                  name="section"
-                  defaultValue={
-                    editingProduct?.section ||
-                    reportGroup(editingProduct?.category || "")
-                  }
-                >
-                  {reportSections.map((item) => (
-                    <option value={item} key={item}>
-                      {sectionLabel(item)}
-                    </option>
-                  ))}
+                Unidad de venta
+                <select name="unit" defaultValue={editingProduct?.unit || "und."}>
+                  <option value="und.">Unidad</option>
+                  <option value="cm">Centímetro lineal</option>
+                  <option value="m">Metro lineal</option>
+                  <option value="rollo">Rollo</option>
                 </select>
               </label>
-              <p className="form-note">
-                Cambia la sección si el producto no está sumando en la tarjeta
-                correcta de Resumen e Historial.
-              </p>
-              <div className="form-row">
-                <label>
-                  Precio de venta
-                  <input
-                    required
-                    name="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={editingProduct?.price}
-                  />
-                </label>
-                <label>
-                  Costo de compra
-                  <input
-                    name="purchaseCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={editingProduct?.purchaseCost || 0}
-                  />
-                </label>
-                <label>
-                  Unidad de venta
-                  <select name="unit" defaultValue={editingProduct?.unit || "und."}>
-                    <option value="und.">Unidad</option>
-                    <option value="cm">Centímetro lineal</option>
-                    <option value="m">Metro lineal</option>
-                    <option value="rollo">Rollo</option>
-                  </select>
-                </label>
-                <label>
-                  Stock mínimo
-                  <input
-                    required
-                    name="minStock"
-                    type="number"
-                    min="0"
-                    defaultValue={editingProduct?.minStock}
-                  />
-                </label>
-              </div>
-            </>
-          }
-        />
-      )}
+              <label>
+                Stock mínimo
+                <input
+                  required
+                  name="minStock"
+                  type="number"
+                  min="0"
+                  defaultValue={editingProduct?.minStock}
+                />
+              </label>
+            </div>
+          </>
+        }
+      />
+    )}
       {modal === "stock" && (
         <FormModal
           title="Movimiento de inventario"
