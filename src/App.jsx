@@ -2452,6 +2452,7 @@ function App() {
     </div>
   );
 }
+
 function PanelHeader({ title, detail, action }) {
   return (
     <div className="panel-heading">
@@ -2463,6 +2464,46 @@ function PanelHeader({ title, detail, action }) {
     </div>
   );
 }
+
+function CollapsiblePanel({ title, detail, action, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={`panel lower-panel collapsible-panel ${open ? "" : "collapsed"}`}>
+      <div className="panel-heading">
+        <div
+          className="collapsible-title"
+          onClick={() => setOpen((current) => !current)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setOpen((current) => !current);
+            }
+          }}
+        >
+          <span className={`collapse-chevron ${open ? "open" : ""}`}>
+            <ChevronDown size={18} />
+          </span>
+          <div>
+            <h2>{title}</h2>
+            <p>{detail}</p>
+          </div>
+        </div>
+        {action && (
+          <div
+            className="panel-action"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {action}
+          </div>
+        )}
+      </div>
+      {open && <div className="collapsible-body">{children}</div>}
+    </section>
+  );
+}
+
 function SaleList({
   sales,
   onSelect,
@@ -2927,16 +2968,16 @@ function InventoryView({
   );
   return (
     <section className="inventory-stack">
-      <section className="panel lower-panel purchase-orders">
-        <PanelHeader
-          title="Pedidos a proveedores"
-          detail="Control de pedidos, entregas parciales y pagos"
-          action={
-            <button className="primary-button small" type="button" onClick={onNewOrder}>
-              <Plus size={15} /> Nuevo pedido
-            </button>
-          }
-        />
+      <CollapsiblePanel
+        title="Pedidos a proveedores"
+        detail="Control de pedidos, entregas parciales y pagos"
+        defaultOpen={false}
+        action={
+          <button className="primary-button small" type="button" onClick={onNewOrder}>
+            <Plus size={15} /> Nuevo pedido
+          </button>
+        }
+      >
         {purchaseOrders.length ? purchaseOrders.map((order) => (
           <div className="purchase-order-row" key={order.id}>
             <span>
@@ -2957,112 +2998,114 @@ function InventoryView({
         )) : (
           <div className="empty-state"><ClipboardList size={26} /><p>No hay pedidos registrados.</p></div>
         )}
-      </section>
-      <section className="panel lower-panel">
-      <PanelHeader
+      </CollapsiblePanel>
+
+      <CollapsiblePanel
         title="Inventario de productos"
         detail="Uniformes, libros, fotocopias y útiles"
+        defaultOpen={true}
         action={
           <button className="primary-button small" onClick={onAdd}>
             <Plus size={16} />
             Nuevo producto
           </button>
         }
-      />
-      <div className="table-tools">
-        <div className="search-box">
-          <Search size={17} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar producto..."
-          />
+      >
+        <div className="table-tools">
+          <div className="search-box">
+            <Search size={17} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar producto..."
+            />
+          </div>
         </div>
-      </div>
-      <div className="inventory-table">
-        <div className="inventory-head inventory-products-head">
-          <span>Producto</span>
-          <span>Categoría / sección</span>
-          <span>Costo compra</span>
-          <span>Precio</span>
-          <span>Existencia</span>
-          <span>Acciones</span>
+        <div className="inventory-table">
+          <div className="inventory-head inventory-products-head">
+            <span>Producto</span>
+            <span>Categoría / sección</span>
+            <span>Costo compra</span>
+            <span>Precio</span>
+            <span>Existencia</span>
+            <span>Acciones</span>
+          </div>
+          {products
+            .filter((item) =>
+              `${item.name} ${item.id}`
+                .toLowerCase()
+                .includes(search.toLowerCase()),
+            )
+            .map((product) => (
+              <div className="inventory-row inventory-products-row" key={product.id}>
+                <span className="product-cell">
+                  <ProductIcon category={product.category} />
+                  <strong>
+                    {product.name}
+                    <small>{product.id}</small>
+                  </strong>
+                </span>
+                <span>
+                  {product.category}
+                  <small className="report-section-tag">
+                    {reportGroup(product.category, product.section)}
+                  </small>
+                </span>
+                <span>{money(product.purchaseCost || 0)}</span>
+                <span>{money(product.price)}</span>
+                <span
+                  className={product.stock <= product.minStock ? "low-stock" : ""}
+                >
+                  {product.stock} {product.unit}
+                </span>
+                <span className="inventory-actions">
+                  <button
+                    className="icon-action"
+                    onClick={() => onEdit(product)}
+                    title="Editar producto"
+                  >
+                    <Settings size={15} />
+                  </button>
+                  <button
+                    className="icon-action"
+                    onClick={() => onStock(product)}
+                    title="Registrar movimiento de inventario"
+                  >
+                    <Plus size={15} />
+                  </button>
+                  <button
+                    className="icon-action"
+                    onClick={() => onQr(product)}
+                    title="Ver código QR"
+                  >
+                    <QrCode size={15} />
+                  </button>
+                </span>
+              </div>
+            ))}
         </div>
-        {products
-          .filter((item) =>
-            `${item.name} ${item.id}`
-              .toLowerCase()
-              .includes(search.toLowerCase()),
-          )
-          .map((product) => (
-            <div className="inventory-row inventory-products-row" key={product.id}>
-              <span className="product-cell">
-                <ProductIcon category={product.category} />
-                <strong>
-                  {product.name}
-                  <small>{product.id}</small>
-                </strong>
-              </span>
-              <span>
-                {product.category}
-                <small className="report-section-tag">
-                  {reportGroup(product.category, product.section)}
-                </small>
-              </span>
-              <span>{money(product.purchaseCost || 0)}</span>
-              <span>{money(product.price)}</span>
-              <span
-                className={product.stock <= product.minStock ? "low-stock" : ""}
-              >
-                {product.stock} {product.unit}
-              </span>
-              <span className="inventory-actions">
-                <button
-                  className="icon-action"
-                  onClick={() => onEdit(product)}
-                  title="Editar producto"
-                >
-                  <Settings size={15} />
-                </button>
-                <button
-                  className="icon-action"
-                  onClick={() => onStock(product)}
-                  title="Registrar movimiento de inventario"
-                >
-                  <Plus size={15} />
-                </button>
-                <button
-                  className="icon-action"
-                  onClick={() => onQr(product)}
-                  title="Ver código QR"
-                >
-                  <QrCode size={15} />
-                </button>
-              </span>
-            </div>
-          ))}
-      </div>
-      </section>
-      <section className="panel lower-panel inventory-report">
-        <PanelHeader
-          title="Informe de inventario"
-          detail="Existencias, costos, ventas y valorización del período"
-          action={
-            <button
-              className="secondary-button small"
-              type="button"
-              onClick={() =>
-                printInventoryReport(inventoryReport, reportTotals, {
-                  start: reportStart,
-                  end: reportEnd,
-                })
-              }
-            >
-              <FileText size={15} />
-              Imprimir informe
-            </button>
-          }
-        />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel
+        title="Informe de inventario"
+        detail="Existencias, costos, ventas y valorización del período"
+        defaultOpen={false}
+        action={
+          <button
+            className="secondary-button small"
+            type="button"
+            onClick={() =>
+              printInventoryReport(inventoryReport, reportTotals, {
+                start: reportStart,
+                end: reportEnd,
+              })
+            }
+          >
+            <FileText size={15} />
+            Imprimir informe
+          </button>
+        }
+      >
         <div className="date-filter-fields">
           <label>
             <span>Desde</span>
@@ -3124,7 +3167,7 @@ function InventoryView({
           <span>Costo de lo vendido: <strong>{money(reportTotals.soldCostValue)}</strong></span>
           <span>Margen bruto estimado: <strong>{money(reportTotals.grossMarginValue)}</strong></span>
         </div>
-      </section>
+      </CollapsiblePanel>
     </section>
   );
 }
