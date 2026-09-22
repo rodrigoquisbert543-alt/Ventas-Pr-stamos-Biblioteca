@@ -1721,7 +1721,7 @@ function App() {
                 />
               </label>
               <label>
-                Precio
+                Precio de venta
                 <input
                   required
                   name="price"
