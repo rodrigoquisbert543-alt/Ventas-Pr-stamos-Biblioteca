@@ -40,10 +40,7 @@ import {
 } from "./lib/supabase";
 import "./App.css";
 
-
-function printWithImprovedFormat() {
-  printElement(".receipt-modal");
-}const navItems = [
+const navItems = [
   ["Resumen", LayoutDashboard],
   ["Nueva venta", ShoppingCart],
   ["Inventario", Archive],
@@ -65,6 +62,7 @@ const reportSections = [
 ];
 const sectionLabel = (value = "") =>
   value ? `${value.charAt(0)}${value.slice(1).toLowerCase()}` : "";
+
 function nextCustomerId(list) {
   const used = new Set(list.map((item) => item.id));
   let index = list.length + 1;
@@ -167,7 +165,8 @@ function parseCsv(text) {
       row
         .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
         .map((cell) => cell.trim().replace(/^"|"$/g, "")),
-    );
+    )
+    .filter(Boolean);
   if (!rows.length) return [];
   const headers = rows.shift().map((header) =>
     header
@@ -729,23 +728,6 @@ function App() {
     setModal(null);
     showToast("Producto añadido al inventario");
   };
-  const _addMaterial = (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const material = {
-      id: `MAT-${String(materials.length + 1).padStart(3, "0")}`,
-      name: data.get("name"),
-      category: data.get("category"),
-      location: data.get("location"),
-      status: "Disponible",
-      borrower: "",
-      due: "",
-    };
-    setMaterials((current) => [...current, material]);
-    setModal(null);
-    setSelectedQr(material);
-    showToast("Objeto añadido y QR generado");
-  };
   const editProduct = (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -1253,7 +1235,7 @@ function App() {
         </div>
         <nav className="main-nav">
           {navItems.map(([label]) => (
-            <span key={label}>{nav(label)}</span>
+            <span key={label} style={{ display: "contents" }}>{nav(label)}</span>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -1856,6 +1838,7 @@ function App() {
           title="Movimiento de inventario"
           icon={PackagePlus}
           stockMode
+          editingProduct={editingProduct}
           onSubmit={addStock}
           onClose={() => {
             setEditingProduct(null);
@@ -2769,7 +2752,7 @@ function InventoryView({
             <button
               className="secondary-button small"
               type="button"
-              onClick={() => printWithImprovedFormat()}
+              onClick={() => printElement(".inventory-report")}
             >
               <FileText size={15} />
               Imprimir informe
@@ -2909,7 +2892,7 @@ function PurchaseOrderPrint({ order, onClose }) {
         </div>
         <div className="receipt-total"><span>Total</span><strong>{money(order.total)}</strong></div>
         <p className="receipt-note">Adelanto/pagado: {money(order.paid)}<br />Saldo: {money(order.balance)}<br />{order.notes}</p>
-        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cerrar</button><button className="primary-button" onClick={() => printWithImprovedFormat()}><FileText size={16} /> Imprimir</button></div>
+        <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Cerrar</button><button className="primary-button" onClick={() => printElement(".purchase-order-print")}><FileText size={16} /> Imprimir</button></div>
       </div>
     </div>
   );
@@ -3575,6 +3558,7 @@ function FormModal({
   onSubmit,
   onClose,
   stockMode = false,
+  editingProduct = null,
 }) {
   const [operation, setOperation] = useState("Entrada");
   return (
@@ -3587,42 +3571,44 @@ function FormModal({
           <Icon size={22} />
         </div>
         <h2>{title}</h2>
-        {stockMode && (
-          <label>
-            Operación
-            <select
-              name="operation"
-              value={operation}
-              onChange={(event) => setOperation(event.target.value)}
-            >
-              <option>Entrada</option>
-              <option>Salida</option>
-            </select>
-          </label>
-        )}
-        {stockMode && (
-          <label>
-            Motivo
-            <select name="reason">
-              {operation === "Entrada" ? (
-                <option>Compra o reposición de mercadería</option>
-              ) : (
-                <>
-                  <option>Deterioro</option>
-                  <option>Defecto de fábrica</option>
-                  <option>Daño</option>
-                  <option>Libro incompleto</option>
-                  <option>Pérdida</option>
-                  <option>Donación o retiro autorizado</option>
-                  <option>Otro</option>
-                </>
-              )}
-            </select>
-          </label>
-        )}
-        {stockMode && (
-          <label>
-            {operation === "Entrada" ? "Cantidad recibida" : "Cantidad retirada"}
+
+        <div className="modal-scroll-body">
+          {stockMode && (
+            <label>
+              Operación
+              <select
+                name="operation"
+                value={operation}
+                onChange={(event) => setOperation(event.target.value)}
+              >
+                <option>Entrada</option>
+                <option>Salida</option>
+              </select>
+            </label>
+          )}
+          {stockMode && (
+            <label>
+              Motivo
+              <select name="reason">
+                {operation === "Entrada" ? (
+                  <option>Compra o reposición de mercadería</option>
+                ) : (
+                  <>
+                    <option>Deterioro</option>
+                    <option>Defecto de fábrica</option>
+                    <option>Daño</option>
+                    <option>Libro incompleto</option>
+                    <option>Pérdida</option>
+                    <option>Donación o retiro autorizado</option>
+                    <option>Otro</option>
+                  </>
+                )}
+              </select>
+            </label>
+          )}
+          {stockMode && (
+            <label>
+              {operation === "Entrada" ? "Cantidad recibida" : "Cantidad retirada"}
               <input
                 required
                 name="quantity"
@@ -3630,15 +3616,18 @@ function FormModal({
                 min="0.01"
                 step={editingProduct?.unit === "cm" ? "0.01" : "1"}
               />
-          </label>
-        )}
-        {stockMode && operation === "Entrada" && (
-          <label>
-            Costo total de compra (opcional)
-            <input name="cost" type="number" step="0.01" min="0" />
-          </label>
-        )}
-        {fields}
+            </label>
+          )}
+          {stockMode && operation === "Entrada" && (
+            <label>
+              Costo total de compra (opcional)
+              <input name="cost" type="number" step="0.01" min="0" />
+            </label>
+          )}
+
+          {fields}
+        </div>
+
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>
             Cancelar
@@ -3753,7 +3742,7 @@ function ReceiptModal({ sale, onClose, onVoid }) {
           <span>Servicio, integridad y mayordomía cristiana</span>
         </div>
         <div className="modal-actions">
-          <button className="secondary-button" onClick={() => printWithImprovedFormat()}>
+          <button className="secondary-button" onClick={() => printElement(".receipt-modal")}>
             <Download size={16} />
             Reimprimir
           </button>
@@ -3799,7 +3788,7 @@ function QrModal({ item, onClose }) {
           />
         </div>
         <div className="modal-actions">
-          <button className="secondary-button" onClick={() => printWithImprovedFormat()}>
+          <button className="secondary-button" onClick={() => printElement(".qr-print-only", "qr")}>
             <Download size={16} />
             Imprimir etiqueta
           </button>
@@ -3812,4 +3801,4 @@ function QrModal({ item, onClose }) {
   );
 }
 export default App;
-
+export { QrModal };
