@@ -2169,7 +2169,7 @@ function App() {
                   min="0.01"
                 />
               </label>
-              <PaymentFields />
+              <PaymentFields total={0} />
             </>
           }
         />
@@ -2247,8 +2247,13 @@ function SaleList({
     </div>
   );
 }
-function PaymentFields() {
+function PaymentFields({ total = 0 }) {
   const [payment, setPayment] = useState("Efectivo");
+  const [received, setReceived] = useState("");
+  const receivedNumber = Number(received) || 0;
+  const change = receivedNumber - total;
+  const showCashField = payment === "Efectivo" || payment === "Ambos";
+
   return (
     <>
       <label>
@@ -2256,7 +2261,10 @@ function PaymentFields() {
         <select
           name="payment"
           value={payment}
-          onChange={(event) => setPayment(event.target.value)}
+          onChange={(event) => {
+            setPayment(event.target.value);
+            setReceived("");
+          }}
         >
           <option>Efectivo</option>
           <option>QR</option>
@@ -2264,7 +2272,7 @@ function PaymentFields() {
         </select>
       </label>
       <div className="form-row">
-        {(payment === "Efectivo" || payment === "Ambos") && (
+        {showCashField && (
           <label>
             Efectivo
             <input
@@ -2273,6 +2281,9 @@ function PaymentFields() {
               step="0.01"
               min="0"
               placeholder="0.00"
+              readOnly={payment === "Efectivo"}
+              defaultValue={payment === "Efectivo" ? total : ""}
+              key={`cash-${payment}-${total}`}
             />
           </label>
         )}
@@ -2289,6 +2300,30 @@ function PaymentFields() {
           </label>
         )}
       </div>
+
+      {showCashField && total > 0 && (
+        <div className="change-calculator">
+          <label>
+            Monto recibido del cliente
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Ej. 100"
+              value={received}
+              onChange={(event) => setReceived(event.target.value)}
+            />
+          </label>
+          {receivedNumber > 0 && (
+            <div className={`change-result ${change >= 0 ? "ok" : "pending"}`}>
+              <span>
+                {change >= 0 ? "Cambio a devolver" : "Falta por cubrir"}
+              </span>
+              <strong>{money(Math.abs(change))}</strong>
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -2506,7 +2541,7 @@ function SaleView({
               {selectedRecord.phone ? ` · ${selectedRecord.phone}` : ""}
             </p>
           )}
-          <PaymentFields />
+          <PaymentFields total={saleTotal} />
           <div className="total-line">
             <span>Total a cobrar</span>
             <strong>{money(saleTotal)}</strong>
