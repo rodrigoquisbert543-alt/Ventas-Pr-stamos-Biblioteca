@@ -136,6 +136,7 @@ function readMaterials() {
   const legacy = readStorage("vida-verdad-materials-v1", null);
   return current?.length ? current : legacy?.length ? legacy : [];
 }
+
 function printElement(selector, kind = "receipt") {
   const element = document.querySelector(selector);
   if (!element) return;
@@ -156,6 +157,263 @@ function printElement(selector, kind = "receipt") {
   printWindow.focus();
   printWindow.print();
 }
+
+function printInventoryReport(reportData, totals, range) {
+  const printWindow = window.open("", "_blank", "width=1000,height=800");
+  if (!printWindow) return;
+
+  const fmtDate = (value) => {
+    if (!value) return "—";
+    const d = new Date(value + "T00:00:00");
+    return d.toLocaleDateString("es-BO", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const periodLabel =
+    range.start || range.end
+      ? `Del ${range.start ? fmtDate(range.start) : "inicio"} al ${range.end ? fmtDate(range.end) : "hoy"}`
+      : "Todo el período";
+
+  const rowsHtml = reportData
+    .map(
+      (p) => `
+      <tr>
+        <td class="product-cell">
+          <strong>${p.name}</strong>
+          <small>${p.id}</small>
+        </td>
+        <td class="num">Bs. ${Number(p.purchaseCost || 0).toFixed(2)}</td>
+        <td class="num">Bs. ${Number(p.salePrice || 0).toFixed(2)}</td>
+        <td class="num">${p.initialStock} ${p.unit}</td>
+        <td class="num">${p.sold} ${p.unit}</td>
+        <td class="num">${p.finalStock} ${p.unit}</td>
+        <td class="num">Bs. ${Number(p.finalCostValue || 0).toFixed(2)}</td>
+      </tr>`,
+    )
+    .join("");
+
+  printWindow.document.open();
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8" />
+      <title>Informe de Inventario · Vida y Verdad Caranavi</title>
+      <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body {
+          font-family: 'Helvetica', 'Arial', sans-serif;
+          color: #17212b;
+          margin: 0;
+          padding: 0;
+          font-size: 10px;
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          border-bottom: 3px solid #1118a8;
+          padding-bottom: 12px;
+          margin-bottom: 18px;
+        }
+        .header img { width: 54px; height: 54px; object-fit: contain; }
+        .header-text { flex: 1; }
+        .header-text h1 {
+          margin: 0;
+          font-size: 18px;
+          color: #1118a8;
+          letter-spacing: -.3px;
+        }
+        .header-text small {
+          display: block;
+          color: #667085;
+          font-size: 10px;
+          margin-top: 3px;
+        }
+        .doc-title {
+          background: #f5f6fb;
+          border-left: 4px solid #e30613;
+          padding: 8px 12px;
+          margin-bottom: 14px;
+        }
+        .doc-title h2 {
+          margin: 0;
+          font-size: 14px;
+          color: #17212b;
+        }
+        .doc-title p {
+          margin: 3px 0 0;
+          font-size: 10px;
+          color: #667085;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 9.5px;
+        }
+        thead th {
+          background: #1118a8;
+          color: #fff;
+          text-align: left;
+          padding: 7px 6px;
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: .03em;
+          border: 1px solid #1118a8;
+        }
+        thead th.num { text-align: right; }
+        tbody td {
+          padding: 6px;
+          border-bottom: 1px solid #e2e5ed;
+          vertical-align: top;
+        }
+        tbody td.num { text-align: right; white-space: nowrap; }
+        tbody tr:nth-child(even) { background: #fafbfd; }
+        .product-cell strong { display: block; font-size: 10px; }
+        .product-cell small { display: block; color: #667085; font-size: 8px; margin-top: 1px; }
+        tfoot td {
+          padding: 8px 6px;
+          border-top: 2px solid #17212b;
+          background: #f5f6fb;
+          font-weight: 700;
+          font-size: 10px;
+        }
+        tfoot td.num { text-align: right; }
+        .summary {
+          margin-top: 20px;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+        }
+        .summary-card {
+          border: 1px solid #e2e5ed;
+          border-radius: 6px;
+          padding: 10px 12px;
+          background: #f8fbf9;
+        }
+        .summary-card span {
+          display: block;
+          font-size: 8px;
+          color: #667085;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+          font-weight: 700;
+        }
+        .summary-card strong {
+          display: block;
+          font-size: 13px;
+          color: #1118a8;
+          margin-top: 4px;
+        }
+        .footer {
+          margin-top: 26px;
+          padding-top: 10px;
+          border-top: 1px solid #e2e5ed;
+          display: flex;
+          justify-content: space-between;
+          font-size: 8px;
+          color: #667085;
+        }
+        .signatures {
+          margin-top: 40px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 60px;
+        }
+        .signature-line {
+          border-top: 1px solid #17212b;
+          padding-top: 4px;
+          text-align: center;
+          font-size: 8px;
+          color: #667085;
+        }
+        @media print {
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <img src="/logo-vida-verdad.jpg" alt="Logo" />
+        <div class="header-text">
+          <h1>Vida y Verdad Caranavi</h1>
+          <small>Gestión comercial · Sistema de control de inventario</small>
+        </div>
+      </div>
+
+      <div class="doc-title">
+        <h2>Informe de Inventario</h2>
+        <p>${periodLabel} · Emitido el ${new Date().toLocaleString("es-BO", { dateStyle: "long", timeStyle: "short" })}</p>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="num">Costo compra</th>
+            <th class="num">Precio venta</th>
+            <th class="num">Inv. inicial</th>
+            <th class="num">Cant. vendida</th>
+            <th class="num">Saldo final</th>
+            <th class="num">Valor costo final</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>TOTALES</td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td class="num">${totals.initialStock} und.</td>
+            <td class="num">${totals.sold} und.</td>
+            <td class="num">${totals.finalStock} und.</td>
+            <td class="num">Bs. ${Number(totals.finalCostValue).toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="summary">
+        <div class="summary-card">
+          <span>Valor inicial al costo</span>
+          <strong>Bs. ${Number(totals.initialCostValue).toFixed(2)}</strong>
+        </div>
+        <div class="summary-card">
+          <span>Ventas a precio de venta</span>
+          <strong>Bs. ${Number(totals.soldSalesValue).toFixed(2)}</strong>
+        </div>
+        <div class="summary-card">
+          <span>Costo de lo vendido</span>
+          <strong>Bs. ${Number(totals.soldCostValue).toFixed(2)}</strong>
+        </div>
+        <div class="summary-card">
+          <span>Margen bruto estimado</span>
+          <strong>Bs. ${Number(totals.grossMarginValue).toFixed(2)}</strong>
+        </div>
+      </div>
+
+      <div class="signatures">
+        <div class="signature-line">Elaborado por</div>
+        <div class="signature-line">Revisado por auditoría</div>
+      </div>
+
+      <div class="footer">
+        <span>Colegio Vida y Verdad · Caranavi</span>
+        <span>Documento generado automáticamente</span>
+      </div>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 300);
+}
+
 function parseCsv(text) {
   const rows = text
     .trim()
@@ -2793,7 +3051,12 @@ function InventoryView({
             <button
               className="secondary-button small"
               type="button"
-              onClick={() => printElement(".inventory-report")}
+              onClick={() =>
+                printInventoryReport(inventoryReport, reportTotals, {
+                  start: reportStart,
+                  end: reportEnd,
+                })
+              }
             >
               <FileText size={15} />
               Imprimir informe
