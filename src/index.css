@@ -4,3 +4,105 @@
 body { margin: 0; min-width: 320px; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
+/* =========================================
+   ESTILOS SOLO PARA IMPRESIÓN DE COMPROBANTES
+   ========================================= */
+@media print {
+  /* 1. Resetear el fondo y color de la app para el papel */
+  :root {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 2. Ocultar todo lo que no sea el comprobante */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 3. Hacer visible SOLO el modal del recibo y sus hijos */
+  .receipt-modal,
+  .receipt-modal * {
+    visibility: visible;
+  }
+
+  /* 4. Posicionar el recibo en la esquina superior izquierda del papel */
+  .receipt-modal {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 15px !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* 5. AUMENTAR EL TAMAÑO DE LAS LETRAS (La clave del asunto) */
+  .receipt-modal {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 18px !important;   /* Antes probablemente 12-14px */
+    line-height: 1.6 !important;  /* Más espacio entre líneas */
+    font-weight: 500 !important;  /* Un poco más grueso para que se lea mejor */
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 6. Títulos, totales y datos importantes AÚN más grandes */
+  .receipt-modal h1,
+  .receipt-modal h2,
+  .receipt-modal h3,
+  .receipt-modal h4,
+  .receipt-modal .total,
+  .receipt-modal strong,
+  .receipt-modal b {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    margin-bottom: 8px !important;
+  }
+
+  /* 7. Forzar que TODOS los textos pequeños también crezcan */
+  .receipt-modal p,
+  .receipt-modal span,
+  .receipt-modal div,
+  .receipt-modal td,
+  .receipt-modal th,
+  .receipt-modal li,
+  .receipt-modal label {
+    font-size: 18px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* 8. Tablas: más espacio entre filas para mejor lectura */
+  .receipt-modal table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .receipt-modal td,
+  .receipt-modal th {
+    padding: 8px 4px !important; /* Más aire entre filas */
+  }
+
+  /* 9. Ocultar botones dentro del modal al imprimir */
+  .receipt-modal .modal-actions,
+  .receipt-modal button {
+    display: none !important;
+  }
+
+  /* 10. Evitar que se corten líneas entre páginas */
+  .receipt-modal tr,
+  .receipt-modal p,
+  .receipt-modal div {
+    page-break-inside: avoid;
+  }
+}
