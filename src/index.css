@@ -49,7 +49,7 @@ button { cursor: pointer; }
   /* 5. AUMENTAR EL TAMAÑO DE LAS LETRAS (La clave del asunto) */
   .receipt-modal {
     font-family: 'DM Sans', sans-serif !important;
-    font-size: 18px !important;   /* Antes probablemente 12-14px */
+    font-size: 22px !important;   /* Antes probablemente 12-16px */
     line-height: 1.6 !important;  /* Más espacio entre líneas */
     font-weight: 500 !important;  /* Un poco más grueso para que se lea mejor */
     color: #000000 !important;
@@ -78,7 +78,7 @@ button { cursor: pointer; }
   .receipt-modal th,
   .receipt-modal li,
   .receipt-modal label {
-    font-size: 18px !important;
+    font-size: 22px !important;
     line-height: 1.6 !important;
   }
 
