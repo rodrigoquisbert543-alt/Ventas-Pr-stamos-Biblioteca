@@ -3189,9 +3189,31 @@ function PurchaseOrderModal({ products, onSubmit, onClose }) {
                 <option value="">Producto</option>
                 {products.map((product) => <option value={product.id} key={product.id}>{product.name} · {product.unit || "und."}</option>)}
               </select>
-              <input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} aria-label="Cantidad pedida" />
-              <input type="number" min="0" step="0.01" value={line.unitCost} onChange={(event) => updateLine(index, "unitCost", event.target.value)} aria-label="Costo unitario" />
-              <button type="button" className="icon-action" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}><Trash2 size={14} /></button>
+              <input 
+                type="number" 
+                min="0" 
+                step="any" 
+                value={line.quantity} 
+                onChange={(event) => updateLine(index, "quantity", event.target.value)} 
+                aria-label="Cantidad pedida" 
+              />
+
+              <input 
+                type="number" 
+                min="0" 
+                step="any" 
+                value={line.unitCost} 
+                onChange={(event) => updateLine(index, "unitCost", event.target.value)} 
+                aria-label="Costo unitario" 
+              />
+
+              <button 
+                type="button" 
+                className="icon-action" 
+                onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}
+                >
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
