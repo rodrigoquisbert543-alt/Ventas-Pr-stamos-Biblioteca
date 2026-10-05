@@ -3982,11 +3982,11 @@ function FormModal({
                 required
                 name="quantity"
                 type="number"
-                min="0.01"
-                step={editingProduct?.unit === "cm" ? "0.01" : "1"}
+                min="0"
+                step="any"
               />
             </label>
-          )}
+          )}        
           {stockMode && operation === "Entrada" && (
             <label>
               Costo total de compra (opcional)
