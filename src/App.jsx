@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -18,14 +18,17 @@ import {
   FileText,
   LayoutDashboard,
   Menu,
+  Moon,
   PackagePlus,
   Plus,
+  Printer,
   QrCode,
   Receipt,
   Search,
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Sun,
   Trash2,
   Upload,
   UserRound,
@@ -48,6 +51,9 @@ const navItems = [
   ["Historial", BarChart3],
   ["Caja", WalletCards],
   ["Préstamos", ClipboardList],
+  ["Cuentas por cobrar", Receipt],
+  ["Recordatorios", CalendarRange],
+  ["Libros por curso", BookOpen],
 ];
 const money = (value) => `Bs. ${Number(value).toFixed(2)}`;
 const familyRelations = ["Estudiante", "Padre", "Madre", "Tutor", "Otro"];
@@ -91,6 +97,72 @@ function uniqueFamilies(customers) {
         .filter(Boolean),
     ),
   ].sort((a, b) => a.localeCompare(b, "es"));
+}
+
+function studentHasPurchasedBook(studentId, productId, sales, records) {
+  return (
+    sales.some(
+      (sale) =>
+        sale.status !== "Anulada" &&
+        sale.studentId === studentId &&
+        sale.items?.some((item) => item.id === productId),
+    ) ||
+    records.some(
+      (record) =>
+        record.studentId === studentId &&
+        record.productId === productId &&
+        record.status !== "Anulado",
+    )
+  );
+}
+
+function bookAssignedToCourse(product, course) {
+  return (product.bookCourses || []).some(
+    (assignedCourse) => normalizedValue(assignedCourse) === normalizedValue(course),
+  );
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
+}
+
+function printCourseBooks(course, books) {
+  const rows = books
+    .map((book, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(book.name)}</td><td>${escapeHtml(book.id)}</td><td>${money(book.price)}</td></tr>`)
+    .join("");
+  printCourseDocument(
+    `Lista de libros · ${course}`,
+    `<h1>Lista de libros</h1><h2>${escapeHtml(course)}</h2><p>Vida y Verdad Caranavi · Gestión ${new Date().getFullYear()}</p><table><thead><tr><th>N°</th><th>Libro</th><th>Código</th><th>Precio</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No hay libros asignados a este curso.</td></tr>'}</tbody></table>`,
+  );
+}
+
+function printCourseProgress(course, students, books, purchased) {
+  const headers = books.map((book) => `<th>${escapeHtml(book.name)}</th>`).join("");
+  const rows = students
+    .map((student) => `<tr><td>${escapeHtml(student.name)}</td><td>${escapeHtml(student.guardianName || "")}</td>${books.map((book) => `<td>${purchased(student.id, book.id) ? "Comprado" : "Pendiente"}</td>`).join("")}</tr>`)
+    .join("");
+  printCourseDocument(
+    `Control de libros · ${course}`,
+    `<h1>Control de libros comprados</h1><h2>${escapeHtml(course)}</h2><p>Los libros pendientes son informativos; no representan una obligación de compra.</p><table><thead><tr><th>Estudiante</th><th>Familia</th>${headers}</tr></thead><tbody>${rows || `<tr><td colspan="${books.length + 2}">No hay estudiantes registrados en este curso.</td></tr>`}</tbody></table>`,
+  );
+}
+
+function printCourseDocument(title, content) {
+  const printWindow = window.open("", "_blank", "width=1000,height=800");
+  if (!printWindow) return;
+  printWindow.document.open();
+  printWindow.document.write(
+    `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>@page{size:A4 landscape;margin:12mm}body{font:12px Arial,sans-serif;color:#17212b}h1{font-size:22px;margin:0 0 6px}h2{font-size:17px;margin:0 0 8px}p{color:#555;margin:0 0 18px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #adb5bd;text-align:left}th{background:#eef2f5}td{vertical-align:top}</style></head><body>${content}</body></html>`,
+  );
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
 }
 function mergeRecords(localRecords = [], cloudRecords = []) {
   const merged = new Map(localRecords.map((record) => [record.id, record]));
@@ -136,6 +208,54 @@ function readMaterials() {
   const legacy = readStorage("vida-verdad-materials-v1", null);
   return current?.length ? current : legacy?.length ? legacy : [];
 }
+const monthlyTasks = [
+  { id: "personal-deductions", day: 1, title: "Empezar a calcular descuentos del personal", office: "Personal del colegio" },
+  { id: "infocred", day: 10, title: "Declarar planilla de deudores", office: "INFOCRED" },
+  { id: "sedem", day: 10, title: "Registrar planilla", office: "SEDEM" },
+  { id: "labor-ministry", day: 11, title: "Declarar planilla de cuentas por cobrar", office: "Ministerio de Trabajo" },
+  { id: "gestora", day: 21, title: "Declarar planilla", office: "Gestora" },
+];
+function localDateString(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+function currentMonthlyReminders(date = new Date(), completed = {}) {
+  const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return monthlyTasks.flatMap((task) => {
+    const due = new Date(date.getFullYear(), date.getMonth(), task.day);
+    const daysUntilDue = Math.ceil((due - new Date(date.getFullYear(), date.getMonth(), date.getDate())) / 86400000);
+    if (completed[`${period}:${task.id}`] || daysUntilDue > 3) return [];
+    return [{ ...task, period, daysUntilDue }];
+  });
+}
+function productsFromSalesHistory(sales) {
+  const recovered = new Map();
+  for (const sale of sales) {
+    for (const line of sale.items || []) {
+      if (!line?.id || !line?.name) continue;
+      const existing = recovered.get(line.id);
+      const saleTime = Date.parse(sale.date || sale.sold_at || "") || 0;
+      if (existing && existing.saleTime >= saleTime) continue;
+      const category = line.category || "Otros";
+      recovered.set(line.id, {
+        id: line.id,
+        name: line.name,
+        category,
+        section: reportGroup(category, line.section),
+        price: Number(line.price || 0),
+        purchaseCost: Number(line.purchaseCost || 0),
+        stock: 0,
+        minStock: 5,
+        unit: line.unit || "und.",
+        saleTime,
+      });
+    }
+  }
+  return [...recovered.values()].map((product) => {
+    const recoveredProduct = { ...product };
+    delete recoveredProduct.saleTime;
+    return recoveredProduct;
+  });
+}
 
 function printElement(selector, kind = "receipt") {
   const element = document.querySelector(selector);
@@ -151,7 +271,7 @@ function printElement(selector, kind = "receipt") {
         );
   printWindow.document.open();
   printWindow.document.write(
-    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr" ? "auto" : "80mm auto"};margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif;color:#17212b}.qr-print-only svg{display:block;width:210px;height:210px}.receipt-modal{width:72mm;max-width:72mm;padding:0;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-top{display:flex;align-items:center;gap:8px;background:#f7faf8;border-bottom:2px solid #1118a8;box-shadow:inset 4px 0 0 #e30613;padding:8px 6px 10px}.receipt-top>span{display:flex;flex:1;flex-direction:column;gap:3px}.receipt-top strong{display:block;font-size:12px;line-height:1.15}.receipt-top small{display:block;color:#1118a8;font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.receipt-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}.receipt-number{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px;align-items:start;padding:11px 0 9px;border-bottom:1px solid #e2e5ed;font-size:10px}.receipt-number span{font-weight:600;white-space:nowrap}.receipt-number small{min-width:0;text-align:right;font-size:8px;line-height:1.3;overflow-wrap:anywhere}.receipt-lines{display:flex;flex-direction:column}.receipt-lines>div{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:8px;padding:8px 0;border-bottom:1px solid #e2e5ed;font-size:10px;line-height:1.3}.receipt-lines>div>span{min-width:0;overflow-wrap:anywhere}.receipt-lines strong{display:block}.receipt-lines small{display:block;color:#667085;font-size:8px;margin-top:2px}.receipt-lines b{white-space:nowrap;font-size:10px}.receipt-total{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 9px;border-bottom:1px solid #e2e5ed}.receipt-total span{font-size:11px}.receipt-total strong{color:#176c67;font-size:20px;white-space:nowrap}.receipt-note{margin:12px 0 0;text-align:center;color:#667085;font-size:8px!important;line-height:1.45}.receipt-signature{page-break-inside:avoid;margin-top:16px;padding-top:10px;border-top:1px solid #e2e5ed}.signature-fields{display:block}.signature-line{position:relative;min-height:38px;border-bottom:1px solid #17212b;padding-top:24px}.signature-line span{position:absolute;top:6px;left:0;color:#667085;font-size:8px}.receipt-footer{display:flex;flex-direction:column;gap:3px;margin-top:16px;padding-top:8px;border-top:1px solid #e2e5ed;text-align:center;color:#667085;font-size:8px}.receipt-footer strong{color:#1118a8;font-size:9px;letter-spacing:.06em}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#1118a8;margin:5px 0 0}</style></head><body>${content}</body></html>`,
+    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr-sheet" ? "A4 portrait" : kind === "qr" ? "auto" : "80mm auto"};margin:${kind === "qr-sheet" ? "8mm" : "0"}}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:${kind === "qr-sheet" ? "block" : "flex"};justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr-sheet" ? "0" : kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif;color:#17212b}.qr-print-only svg{display:block;width:210px;height:210px}.qr-sheet-print-only{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3mm}.qr-sheet-label{display:grid;grid-template-columns:20mm minmax(0,1fr);align-items:center;gap:2mm;min-height:27mm;padding:1mm;border:1px solid #ddd;break-inside:avoid;overflow:hidden}.qr-sheet-label svg{display:block;width:20mm;height:20mm}.qr-sheet-label span{min-width:0;overflow-wrap:anywhere;font-size:7pt;line-height:1.2}.qr-sheet-label strong{display:block;font-size:8pt;margin-bottom:1mm}.receipt-modal{width:72mm;max-width:72mm;padding:0;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-top{display:flex;align-items:center;gap:8px;background:#f7faf8;border-bottom:2px solid #1118a8;box-shadow:inset 4px 0 0 #e30613;padding:8px 6px 10px}.receipt-top>span{display:flex;flex:1;flex-direction:column;gap:3px}.receipt-top strong{display:block;font-size:12px;line-height:1.15}.receipt-top small{display:block;color:#1118a8;font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.receipt-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}.receipt-number{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px;align-items:start;padding:11px 0 9px;border-bottom:1px solid #e2e5ed;font-size:10px}.receipt-number span{font-weight:600;white-space:nowrap}.receipt-number small{min-width:0;text-align:right;font-size:8px;line-height:1.3;overflow-wrap:anywhere}.receipt-lines{display:flex;flex-direction:column}.receipt-lines>div{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:8px;padding:8px 0;border-bottom:1px solid #e2e5ed;font-size:10px;line-height:1.3}.receipt-lines>div>span{min-width:0;overflow-wrap:anywhere}.receipt-lines strong{display:block}.receipt-lines small{display:block;color:#667085;font-size:8px;margin-top:2px}.receipt-lines b{white-space:nowrap;font-size:10px}.receipt-total{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 9px;border-bottom:1px solid #e2e5ed}.receipt-total span{font-size:11px}.receipt-total strong{color:#176c67;font-size:20px;white-space:nowrap}.receipt-note{margin:12px 0 0;text-align:center;color:#667085;font-size:8px!important;line-height:1.45}.receipt-signature{page-break-inside:avoid;margin-top:16px;padding-top:10px;border-top:1px solid #e2e5ed}.signature-fields{display:block}.signature-line{position:relative;min-height:38px;border-bottom:1px solid #17212b;padding-top:24px}.signature-line span{position:absolute;top:6px;left:0;color:#667085;font-size:8px}.receipt-footer{display:flex;flex-direction:column;gap:3px;margin-top:16px;padding-top:8px;border-top:1px solid #e2e5ed;text-align:center;color:#667085;font-size:8px}.receipt-footer strong{color:#1118a8;font-size:9px;letter-spacing:.06em}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#1118a8;margin:5px 0 0}</style></head><body>${content}</body></html>`,
   );
   printWindow.document.close();
   printWindow.focus();
@@ -475,7 +595,14 @@ function ProductIcon({ category }) {
 
 function App() {
   const [products, setProducts] = useState(() =>
-    readStorage("vida-verdad-products", []),
+    (() => {
+      const stored = readStorage("vida-verdad-products", []);
+      const knownIds = new Set(stored.map((product) => product.id));
+      const recovered = productsFromSalesHistory(
+        readStorage("vida-verdad-sales", []),
+      ).filter((product) => !knownIds.has(product.id));
+      return [...stored, ...recovered];
+    })(),
   );
   const [sales, setSales] = useState(() => readStorage("vida-verdad-sales", []));
   const [materials, setMaterials] = useState(readMaterials);
@@ -486,14 +613,39 @@ function App() {
   const [customers, setCustomers] = useState(() =>
     readStorage("vida-verdad-customers", []),
   );
+  const [students, setStudents] = useState(() =>
+    readStorage("vida-verdad-students", []),
+  );
+  const [studentBookRecords, setStudentBookRecords] = useState(() =>
+    readStorage("vida-verdad-student-book-records", []),
+  );
   const [purchaseOrders, setPurchaseOrders] = useState(() =>
     readStorage("vida-verdad-purchase-orders", []),
   );
   const [cash, setCash] = useState(() =>
     readStorage("vida-verdad-cash", { opening: 0, movements: [] }),
   );
+  const [receivables, setReceivables] = useState(() =>
+    readStorage("vida-verdad-receivables", []),
+  );
+  const productsRef = useRef(products);
+  const salesRef = useRef(sales);
+  const [theme, setTheme] = useState(() =>
+    readStorage("vida-verdad-theme", "light"),
+  );
+  const [remindersCompleted, setRemindersCompleted] = useState(() =>
+    readStorage("vida-verdad-reminders-completed", {}),
+  );
+  const [syncStatus, setSyncStatus] = useState(
+    isSupabaseConfigured ? "loading" : "local",
+  );
+  const [schemaWarnings, setSchemaWarnings] = useState([]);
+  const [syncedRecordCounts, setSyncedRecordCounts] = useState({});
+  const [syncVersion, setSyncVersion] = useState(0);
+  const [cloudRetry, setCloudRetry] = useState(0);
   const [activeNav, setActiveNav] = useState("Resumen");
   const [cart, setCart] = useState([]);
+  const [selectedSaleStudentId, setSelectedSaleStudentId] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
   const [historyFilter, setHistoryFilter] = useState("Todos");
@@ -505,6 +657,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [selectedSale, setSelectedSale] = useState(null);
   const [selectedQr, setSelectedQr] = useState(null);
+  const [qrSheetOpen, setQrSheetOpen] = useState(false);
   const [selectedLoanMaterial, setSelectedLoanMaterial] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -514,13 +667,24 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loanScan, setLoanScan] = useState(false);
   const scannerRef = useRef(null);
+  const addToCartRef = useRef(null);
   const loanScanHandlerRef = useRef(null);
   const lastScanRef = useRef({ value: "", time: 0 });
   const cloudReadyRef = useRef(!isSupabaseConfigured);
-  const showToast = (message) => {
+  const cloudSkipTablesRef = useRef([]);
+  const cloudOmittedColumnsRef = useRef(
+    readStorage("vida-verdad-supabase-omitted-columns", {}),
+  );
+  const cloudBaselineRef = useRef({});
+  const syncErrorShownRef = useRef(false);
+  const syncQueueRef = useRef(Promise.resolve());
+  const syncAttemptRef = useRef(0);
+  const syncTimerRef = useRef(null);
+  const forceFullSyncRef = useRef(false);
+  const showToast = useCallback((message) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2600);
-  };
+  }, []);
   useEffect(() => {
     const nativePrint = window.print.bind(window);
     window.print = () => {
@@ -535,19 +699,37 @@ function App() {
     };
   }, []);
   useEffect(() => {
+    localStorage.setItem("vida-verdad-theme", JSON.stringify(theme));
+  }, [theme]);
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
+  useEffect(() => {
+    salesRef.current = sales;
+  }, [sales]);
+  useEffect(() => {
+    localStorage.setItem(
+      "vida-verdad-reminders-completed",
+      JSON.stringify(remindersCompleted),
+    );
+  }, [remindersCompleted]);
+  useEffect(() => {
     const persistState = () => {
       localStorage.setItem("vida-verdad-products", JSON.stringify(products));
       localStorage.setItem("vida-verdad-sales", JSON.stringify(sales));
       localStorage.setItem("vida-verdad-customers", JSON.stringify(customers));
+      localStorage.setItem("vida-verdad-students", JSON.stringify(students));
+      localStorage.setItem("vida-verdad-student-book-records", JSON.stringify(studentBookRecords));
       localStorage.setItem("vida-verdad-purchase-orders", JSON.stringify(purchaseOrders));
       localStorage.setItem("vida-verdad-materials", JSON.stringify(materials));
       localStorage.setItem("vida-verdad-loans", JSON.stringify(loans));
       localStorage.setItem("vida-verdad-teachers", JSON.stringify(teachers));
       localStorage.setItem("vida-verdad-cash", JSON.stringify(cash));
+      localStorage.setItem("vida-verdad-receivables", JSON.stringify(receivables));
     };
     window.addEventListener("beforeunload", persistState);
     return () => window.removeEventListener("beforeunload", persistState);
-  }, [products, sales, customers, materials, loans, teachers, cash, purchaseOrders]);
+  }, [products, sales, customers, students, studentBookRecords, materials, loans, teachers, cash, purchaseOrders, receivables]);
   useEffect(() => {
     localStorage.setItem("vida-verdad-products", JSON.stringify(products));
   }, [products]);
@@ -558,8 +740,17 @@ function App() {
     localStorage.setItem("vida-verdad-customers", JSON.stringify(customers));
   }, [customers]);
   useEffect(() => {
+    localStorage.setItem("vida-verdad-students", JSON.stringify(students));
+  }, [students]);
+  useEffect(() => {
+    localStorage.setItem("vida-verdad-student-book-records", JSON.stringify(studentBookRecords));
+  }, [studentBookRecords]);
+  useEffect(() => {
     localStorage.setItem("vida-verdad-purchase-orders", JSON.stringify(purchaseOrders));
   }, [purchaseOrders]);
+  useEffect(() => {
+    localStorage.setItem("vida-verdad-receivables", JSON.stringify(receivables));
+  }, [receivables]);
   useEffect(() => {
     localStorage.setItem("vida-verdad-materials", JSON.stringify(materials));
     localStorage.setItem("vida-verdad-loans", JSON.stringify(loans));
@@ -567,23 +758,48 @@ function App() {
     localStorage.setItem("vida-verdad-cash", JSON.stringify(cash));
   }, [materials, loans, teachers, cash]);
   useEffect(() => {
+    cloudReadyRef.current = !isSupabaseConfigured;
     loadCloudState()
       .then((cloud) => {
-        if (!cloud) return;
-        if (cloud.products?.length)
-          setProducts(
-            mergeRecords(products, cloud.products).map((product) => ({
+        if (!cloud) {
+          setSyncStatus("local");
+          return;
+        }
+        cloudSkipTablesRef.current = cloud.missingTables || [];
+        cloudBaselineRef.current = cloud;
+        setSchemaWarnings(cloudSkipTablesRef.current);
+        setSyncedRecordCounts(
+          Object.fromEntries(
+            Object.entries(cloud)
+              .filter(([, rows]) => Array.isArray(rows))
+              .map(([table, rows]) => [table, rows.length]),
+          ),
+        );
+        if (cloudSkipTablesRef.current.length)
+          showToast("Supabase conectado. Ejecuta supabase-schema.sql para habilitar las tablas nuevas.");
+        const mergedProducts = cloud.products?.length
+          ? mergeRecords(productsRef.current, cloud.products).map((product) => ({
               ...product,
+              price: Number(product.price || 0),
+              stock: Number(product.stock || 0),
               purchaseCost:
-                product.purchase_cost ?? product.purchaseCost ?? 0,
-              minStock: product.min_stock ?? product.minStock ?? 5,
-            })),
-          );
-        if (cloud.sales?.length)
-          setSales(
-            mergeRecords(sales, cloud.sales).map((sale) => ({
+                Number(product.purchase_cost ?? product.purchaseCost ?? 0),
+              minStock: Number(product.min_stock ?? product.minStock ?? 5),
+              bookCourses: product.book_courses || product.bookCourses || [],
+            }))
+          : productsRef.current;
+        const mergedSales = cloud.sales?.length
+          ? mergeRecords(salesRef.current, cloud.sales).map((sale) => ({
               ...sale,
               date: sale.sold_at || sale.date,
+              total: Number(sale.total || 0),
+              cashAmount: Number(sale.cash_amount ?? sale.cashAmount ?? 0),
+              qrAmount: Number(sale.qr_amount ?? sale.qrAmount ?? 0),
+              items: (sale.items || []).map((item) => ({
+                ...item,
+                price: Number(item.price || 0),
+                quantity: Number(item.quantity || 0),
+              })),
               status: sale.status || "Vigente",
               voidedAt: sale.voided_at || sale.voidedAt,
               customerId: sale.customer_id || sale.customerId || "",
@@ -592,12 +808,23 @@ function App() {
               payer: sale.payer || "",
               payerId: sale.payer_id || sale.payerId || "",
               payerRelation: sale.payer_relation || sale.payerRelation || "",
-            })),
+              studentId: sale.student_id || sale.studentId || "",
+            }))
+          : salesRef.current;
+        const knownProductIds = new Set(mergedProducts.map((product) => product.id));
+        const recoveredProducts = productsFromSalesHistory(mergedSales).filter(
+          (product) => !knownProductIds.has(product.id),
+        );
+        setProducts([...mergedProducts, ...recoveredProducts]);
+        setSales(mergedSales);
+        if (recoveredProducts.length)
+          showToast(
+            `${recoveredProducts.length} producto(s) recuperados del historial con stock 0; confirma las existencias reales`,
           );
         if (cloud.materials?.length) setMaterials((current) => mergeRecords(current, cloud.materials));
         if (cloud.loans?.length)
-          setLoans(
-            mergeRecords(loans, cloud.loans).map((loan) => ({
+          setLoans((current) =>
+            mergeRecords(current, cloud.loans).map((loan) => ({
               ...loan,
               materialId: loan.material_id || loan.materialId || "",
               teacherId: loan.teacher_id || loan.teacherId || "",
@@ -607,10 +834,37 @@ function App() {
           );
         if (cloud.teachers?.length) setTeachers((current) => mergeRecords(current, cloud.teachers));
         if (cloud.customers?.length) setCustomers((current) => mergeRecords(current, cloud.customers));
+        if (cloud.students?.length)
+          setStudents((current) =>
+            mergeRecords(current, cloud.students).map((student) => ({
+              ...student,
+              guardianId: student.guardian_id || student.guardianId || "",
+              guardianName: student.guardian_name || student.guardianName || "",
+              createdAt: student.created_at || student.createdAt || "",
+            })),
+          );
+        if (cloud.student_book_records?.length)
+          setStudentBookRecords((current) =>
+            mergeRecords(current, cloud.student_book_records).map((record) => ({
+              ...record,
+              studentId: record.student_id || record.studentId,
+              productId: record.product_id || record.productId,
+              purchasedAt: record.purchased_at || record.purchasedAt || "",
+            })),
+          );
         if (cloud.purchase_orders?.length)
-          setPurchaseOrders(
-            mergeRecords(purchaseOrders, cloud.purchase_orders).map((order) => ({
+          setPurchaseOrders((current) =>
+            mergeRecords(current, cloud.purchase_orders).map((order) => ({
               ...order,
+              total: Number(order.total || 0),
+              paid: Number(order.paid || 0),
+              balance: Number(order.balance || 0),
+              items: (order.items || []).map((item) => ({
+                ...item,
+                quantity: Number(item.quantity || 0),
+                unitCost: Number(item.unitCost || item.unit_cost || 0),
+                received: Number(item.received || 0),
+              })),
               date: order.ordered_at || order.date,
               receivedAt: order.received_at || order.receivedAt || "",
             })),
@@ -621,34 +875,106 @@ function App() {
             movements: mergeRecords(current.movements, cloud.cash_movements).map((movement) => ({
               ...movement,
               productId: movement.product_id || movement.productId || "",
+              amount: Number(movement.amount || 0),
               operation: movement.operation || "",
               reason: movement.reason || "",
-              quantity: movement.quantity ?? 0,
-              cashAmount: movement.cash_amount ?? movement.cashAmount ?? 0,
-              qrAmount: movement.qr_amount ?? movement.qrAmount ?? 0,
+              quantity: Number(movement.quantity ?? 0),
+              cashAmount: Number(movement.cash_amount ?? movement.cashAmount ?? 0),
+              qrAmount: Number(movement.qr_amount ?? movement.qrAmount ?? 0),
               date: movement.moved_at || movement.date,
             })),
           }));
+        if (cloud.accounts_receivable?.length)
+          setReceivables((current) =>
+            mergeRecords(current, cloud.accounts_receivable).map((record) => ({
+              ...record,
+              guardianName: record.guardian_name || record.guardianName || "",
+              studentName: record.student_name || record.studentName || "",
+              carnet: record.carnet || "",
+              family: record.family || "",
+              gestion: record.gestion || "",
+              total: Number(record.total || 0),
+              paid: Number(record.paid || 0),
+              paymentHistory: record.payment_history || record.paymentHistory || [],
+              contract: record.contract || "",
+              commitment: record.commitment || "",
+              infocredStatus: record.infocred_status || record.infocredStatus || "Pendiente",
+              createdAt: record.created_at || record.createdAt || "",
+            })),
+          );
+        const cashSettings = cloud.app_settings?.find((setting) => setting.id === "cash");
+        if (cashSettings?.value)
+          setCash((current) => ({
+            ...current,
+            opening: Number(cashSettings.value.opening ?? current.opening ?? 0),
+          }));
         cloudReadyRef.current = true;
+        setSyncStatus(cloudSkipTablesRef.current.length ? "schema" : "synced");
       })
-      .catch(() => {
-        cloudReadyRef.current = true;
-        showToast("Modo local activo: no se pudo cargar Supabase");
+      .catch((error) => {
+        cloudReadyRef.current = false;
+        setSyncStatus("error");
+        showToast(error.message || "No se pudo cargar la información de Supabase");
       });
-  }, []);
+  }, [cloudRetry, showToast]);
   useEffect(() => {
-    if (isSupabaseConfigured && cloudReadyRef.current)
-      syncCloudState({
-        products,
-        sales,
-        materials,
-        loans,
-        teachers,
-        customers,
-        purchaseOrders,
-        cash,
-      }).catch(() => {});
-  }, [products, sales, materials, loans, teachers, customers, cash, purchaseOrders]);
+    if (!isSupabaseConfigured || !cloudReadyRef.current) return undefined;
+    const attempt = ++syncAttemptRef.current;
+    const snapshot = {
+      products,
+      sales,
+      materials,
+      loans,
+      teachers,
+      customers,
+      purchaseOrders,
+      cash,
+      receivables,
+      students,
+      studentBookRecords,
+      skipTables: cloudSkipTablesRef.current,
+      omittedColumns: cloudOmittedColumnsRef.current,
+      baseline: cloudBaselineRef.current,
+      forceFullSync: forceFullSyncRef.current,
+    };
+    window.clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = window.setTimeout(() => {
+      setSyncStatus("syncing");
+      syncQueueRef.current = syncQueueRef.current
+        .catch(() => {})
+        .then(() => syncCloudState(snapshot))
+        .then(({ counts, baseline, omittedColumns, missingColumns }) => {
+          if (attempt !== syncAttemptRef.current) return;
+          cloudBaselineRef.current = baseline;
+          cloudOmittedColumnsRef.current = omittedColumns;
+          localStorage.setItem(
+            "vida-verdad-supabase-omitted-columns",
+            JSON.stringify(omittedColumns),
+          );
+          setSchemaWarnings([
+            ...cloudSkipTablesRef.current,
+            ...missingColumns,
+          ]);
+          forceFullSyncRef.current = false;
+          syncErrorShownRef.current = false;
+          setSyncedRecordCounts(counts);
+          setSyncStatus(
+            cloudSkipTablesRef.current.length || missingColumns.length
+              ? "schema"
+              : "synced",
+          );
+        })
+        .catch((error) => {
+          if (attempt !== syncAttemptRef.current) return;
+          setSyncStatus("error");
+          if (!syncErrorShownRef.current) {
+            syncErrorShownRef.current = true;
+            showToast(error.message || "No se pudieron sincronizar los cambios");
+          }
+        });
+    }, 250);
+    return () => window.clearTimeout(syncTimerRef.current);
+  }, [products, sales, materials, loans, teachers, customers, cash, purchaseOrders, receivables, students, studentBookRecords, syncVersion, showToast]);
   useEffect(() => {
     const openQr = (event) => setSelectedQr(event.detail);
     window.addEventListener("open-material-qr", openQr);
@@ -691,7 +1017,7 @@ function App() {
     tools.append(addButton, scanButton);
     document.querySelector(".loans-layout .panel")?.prepend(tools);
     return () => tools.remove();
-  }, [activeNav, materials.length]);
+  }, [activeNav, materials.length, showToast]);
   useEffect(() => {
     if (activeNav !== "Préstamos") return undefined;
     const panel = document.querySelector(".loans-layout .panel");
@@ -747,7 +1073,7 @@ function App() {
             (item) => item.id === value.trim().toUpperCase(),
           );
           if (product) {
-            addToCart(product);
+            addToCartRef.current?.(product);
             setScanValue("");
             return;
           }
@@ -757,7 +1083,7 @@ function App() {
       )
       .catch(() => {});
     return () => stopScanner();
-  }, [modal, loanScan, products]);
+  }, [modal, loanScan, products, showToast]);
   const saleTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [cart],
@@ -773,8 +1099,19 @@ function App() {
       ),
     [products, search, category],
   );
-  const addToCart = (product) => {
+  const addToCart = useCallback((product) => {
     if (product.stock <= 0) return showToast("Producto sin stock");
+    if (product.bookCourses?.length) {
+      const student = students.find((item) => item.id === selectedSaleStudentId);
+      if (!student)
+        return showToast("Selecciona al estudiante para vender sus libros");
+      if (!bookAssignedToCourse(product, student.course))
+        return showToast(`${product.name} no está asignado al curso ${student.course}`);
+      if (studentHasPurchasedBook(student.id, product.id, sales, studentBookRecords))
+        return showToast(`${student.name} ya tiene registrado este libro`);
+      if (cart.some((item) => item.id === product.id))
+        return showToast("Este libro ya está en la venta para el estudiante");
+    }
     setCart((current) =>
       current.some((item) => item.id === product.id)
         ? current.map((item) =>
@@ -785,7 +1122,10 @@ function App() {
         : [...current, { ...product, quantity: 1 }],
     );
     showToast(`${product.name} añadido a la venta`);
-  };
+  }, [students, selectedSaleStudentId, sales, studentBookRecords, cart, showToast]);
+  useEffect(() => {
+    addToCartRef.current = addToCart;
+  }, [addToCart]);
   const updateQuantity = (id, quantity) =>
     setCart((current) =>
       current.map((item) =>
@@ -795,7 +1135,9 @@ function App() {
               quantity: Math.max(
                 item.unit === "cm" || item.unit === "m" ? 0.01 : 1,
                 Math.min(
-                  Number(quantity) || (item.unit === "cm" || item.unit === "m" ? 0.01 : 1),
+                  products.find((product) => product.id === id)?.bookCourses?.length
+                    ? 1
+                    : Number(quantity) || (item.unit === "cm" || item.unit === "m" ? 0.01 : 1),
                   products.find((product) => product.id === id)?.stock || 1,
                 ),
               ),
@@ -829,6 +1171,15 @@ function App() {
     );
     if (unavailable)
       return showToast(`Stock insuficiente: ${unavailable.name}`);
+    const student = students.find((item) => item.id === selectedSaleStudentId);
+    const courseBook = cart.find((item) => item.bookCourses?.length);
+    if (courseBook && !student)
+      return showToast("Selecciona al estudiante para registrar la compra de libros");
+    if (courseBook && cart.some((item) => item.bookCourses?.length &&
+      (!bookAssignedToCourse(item, student.course) ||
+        item.quantity > 1 ||
+        studentHasPurchasedBook(student.id, item.id, sales, studentBookRecords))))
+      return showToast("Revisa el curso y los libros ya registrados para este estudiante");
     const customer = data.get("customer") || "Familia del colegio";
     const customerRecord = customers.find(
       (item) => item.id === customer || item.name === customer,
@@ -845,6 +1196,7 @@ function App() {
       payer: customerRecord?.name || "",
       payerId: customerRecord?.id || "",
       payerRelation: customerRecord?.relation || "",
+      studentId: student?.id || "",
       payment,
       cashAmount,
       qrAmount,
@@ -877,6 +1229,7 @@ function App() {
       ],
     }));
     setCart([]);
+    setSelectedSaleStudentId("");
     setModal(null);
     setSelectedSale(sale);
     showToast(`Venta ${sale.id} registrada`);
@@ -1241,6 +1594,10 @@ function App() {
             stock: Number(row.stock || row.existencias || 0),
             minStock: Number(row.stock_minimo || row.min_stock || 5),
             unit: row.unidad || row.unit || "und.",
+            bookCourses: String(row.cursos || row.book_courses || "")
+              .split("|")
+              .map((course) => course.trim())
+              .filter(Boolean),
           }))
           .filter((item) => item.name);
         setProducts((current) => {
@@ -1264,6 +1621,76 @@ function App() {
     };
     reader.readAsText(file, "UTF-8");
     event.target.value = "";
+  };
+  const addStudent = (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const name = String(data.get("name") || "").trim();
+    const carnet = String(data.get("carnet") || "").trim();
+    const course = String(data.get("course") || "").trim();
+    const guardianId = String(data.get("guardianId") || "");
+    const guardian = customers.find((item) => item.id === guardianId);
+    if (!name || !course || !guardian)
+      return showToast("Completa nombre, curso y familia responsable");
+    if (students.some((item) =>
+      item.name.toLocaleLowerCase() === name.toLocaleLowerCase() &&
+      item.course.toLocaleLowerCase() === course.toLocaleLowerCase() &&
+      item.guardianId === guardianId))
+      return showToast("Este estudiante ya está registrado en ese curso");
+    setStudents((current) => [{
+      id: `EST-${crypto.randomUUID()}`,
+      name,
+      carnet,
+      course,
+      guardianId,
+      guardianName: guardian.name,
+      family: guardian.family || "",
+      createdAt: new Date().toISOString(),
+    }, ...current]);
+    event.currentTarget.reset();
+    showToast("Estudiante registrado");
+  };
+  const assignBookToCourse = (productId, course) => {
+    const normalizedCourse = course.trim();
+    if (!normalizedCourse) return showToast("Escribe el nombre del curso");
+    setProducts((current) => current.map((product) => {
+      if (product.id !== productId) return product;
+      const courses = product.bookCourses || [];
+      if (courses.some((item) => normalizedValue(item) === normalizedValue(normalizedCourse)))
+        return product;
+      return { ...product, bookCourses: [...courses, normalizedCourse] };
+    }));
+    showToast("Libro asignado al curso");
+  };
+  const unassignBookFromCourse = (productId, course) => {
+    setProducts((current) => current.map((product) =>
+      product.id === productId
+        ? { ...product, bookCourses: (product.bookCourses || []).filter(
+            (assignedCourse) => normalizedValue(assignedCourse) !== normalizedValue(course),
+          ) }
+        : product,
+    ));
+    showToast("Libro retirado de este curso");
+  };
+  const toggleStudentBookRecord = (student, product, purchased) => {
+    const recordId = `COMPRA-${student.id}-${product.id}`;
+    const existing = studentBookRecords.find((record) => record.id === recordId);
+    if (purchased && !existing) {
+      setStudentBookRecords((current) => [{
+        id: recordId,
+        studentId: student.id,
+        productId: product.id,
+        status: "Comprado",
+        source: "Compra anterior al sistema",
+        purchasedAt: new Date().toISOString(),
+      }, ...current]);
+    } else if (existing) {
+      setStudentBookRecords((current) => current.map((record) =>
+        record.id === recordId
+          ? { ...record, status: purchased ? "Comprado" : "Anulado" }
+          : record,
+      ));
+    }
   };
   const addCashMovement = (event) => {
     event.preventDefault();
@@ -1382,6 +1809,82 @@ function App() {
     setSelectedLoanMaterial(null);
     setModal(null);
   };
+  const addReceivable = (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const total = Number(data.get("total"));
+    if (!Number.isFinite(total) || total <= 0)
+      return showToast("Ingresa un importe de deuda válido");
+    const receivable = {
+      id: `CXC-${Date.now()}`,
+      guardianName: String(data.get("guardianName") || "").trim(),
+      studentName: String(data.get("studentName") || "").trim(),
+      grade: String(data.get("grade") || "").trim(),
+      carnet: String(data.get("carnet") || "").trim(),
+      family: String(data.get("family") || "").trim(),
+      gestion: String(data.get("gestion") || "").trim(),
+      total,
+      paid: 0,
+      paymentHistory: [],
+      contract: String(data.get("contract") || "").trim(),
+      commitment: String(data.get("commitment") || "").trim(),
+      infocredStatus: "Pendiente",
+      createdAt: new Date().toISOString(),
+    };
+    setReceivables((current) => [receivable, ...current]);
+    showToast("Cuenta por cobrar registrada; no afecta la caja");
+    event.currentTarget.reset();
+  };
+  const registerReceivablePayment = (receivableId, data) => {
+    const record = receivables.find((item) => item.id === receivableId);
+    if (!record) {
+      showToast("No se encontró la cuenta por cobrar");
+      return false;
+    }
+    const balance = Math.max(0, Number(record.total) - Number(record.paid));
+    const amount =
+      data.mode === "total" ? balance : Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > balance + 0.001) {
+      showToast("El importe debe ser mayor a cero y no superar el saldo");
+      return false;
+    }
+    const payment = {
+      id: `AB-${Date.now()}`,
+      amount: Math.min(amount, balance),
+      date: data.date || localDateString(),
+      mode: data.mode,
+      note: String(data.note || "").trim(),
+    };
+    setReceivables((current) =>
+      current.map((item) =>
+        item.id === receivableId
+          ? {
+              ...item,
+              paid: Math.min(Number(item.total), Number(item.paid) + payment.amount),
+              paymentHistory: [payment, ...(item.paymentHistory || [])],
+            }
+          : item,
+      ),
+    );
+    showToast(
+      `Abono de ${money(payment.amount)} anotado; no se registró en caja`,
+    );
+    return true;
+  };
+  const updateInfocredStatus = (receivableId, infocredStatus) => {
+    setReceivables((current) =>
+      current.map((record) =>
+        record.id === receivableId ? { ...record, infocredStatus } : record,
+      ),
+    );
+  };
+  const toggleReminderCompleted = (task) => {
+    const key = `${task.period}:${task.id}`;
+    setRemindersCompleted((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  };
   const summaryMatchesDate = (value) => {
     if (!value) return true;
     const date = new Date(value);
@@ -1455,6 +1958,7 @@ function App() {
       tone: "purple",
     },
   ];
+  const activeReminders = currentMonthlyReminders(new Date(), remindersCompleted);
   const nav = (name) => {
     const Icon = navItems.find(([label]) => label === name)[1];
     return (
@@ -1471,11 +1975,14 @@ function App() {
         {name === "Historial" && sales.length > 0 && (
           <span className="nav-count">{sales.length}</span>
         )}
+        {name === "Recordatorios" && activeReminders.length > 0 && (
+          <span className="nav-count">{activeReminders.length}</span>
+        )}
       </button>
     );
   };
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <aside className={`sidebar ${menuOpen ? "mobile-open" : ""}`}>
         <div className="brand">
           <img className="brand-logo" src="/logo-vida-verdad.jpg" alt="Logo Vida y Verdad" />
@@ -1547,12 +2054,19 @@ function App() {
             <button
               type="button"
               className="icon-button"
-              title="Notificaciones"
+              title={`${activeReminders.length} recordatorios pendientes`}
+              onClick={() => setActiveNav("Recordatorios")}
             >
               <Bell size={19} />
-              <i />
+              {activeReminders.length > 0 && <i />}
             </button>
-            <span className="date-chip">14 SEP 2026</span>
+            <span className="date-chip">
+              {new Date().toLocaleDateString("es-BO", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              }).toUpperCase()}
+            </span>
             <span className="profile-avatar">R</span>
           </div>
         </header>
@@ -1563,12 +2077,16 @@ function App() {
               <h1>
                 {activeNav === "Nueva venta"
                   ? "Punto de venta"
-                  : "Bienvenido Rodrigo"}
+                  : activeNav === "Libros por curso"
+                    ? "Control de libros por curso"
+                    : "Bienvenido Rodrigo"}
               </h1>
               <p className="subtitle">
                 {activeNav === "Nueva venta"
                   ? "Registra una venta rápida para las familias del colegio."
-                  : "Todo lo que necesitas para operar la tienda escolar."}
+                  : activeNav === "Libros por curso"
+                    ? "Administra listas de lectura y verifica las compras por estudiante."
+                    : "Todo lo que necesitas para operar la tienda escolar."}
               </p>
             </div>
             {activeNav !== "Nueva venta" && (
@@ -1718,6 +2236,11 @@ function App() {
             <SaleView
               products={filteredProducts}
               customers={customers}
+              students={students}
+              sales={sales}
+              studentBookRecords={studentBookRecords}
+              selectedStudentId={selectedSaleStudentId}
+              onStudentChange={setSelectedSaleStudentId}
               categories={[
                 "Todos",
                 ...new Set(products.map((item) => item.category)),
@@ -1767,6 +2290,7 @@ function App() {
                 setModal("receiveOrder");
               }}
               onPrintOrder={setPrintPurchaseOrder}
+              onPrintAllQrs={() => setQrSheetOpen(true)}
             />
           )}
           {activeNav === "Clientes" && (
@@ -1804,6 +2328,35 @@ function App() {
               onMovement={() => setModal("movement")}
             />
           )}
+          {activeNav === "Cuentas por cobrar" && (
+            <AccountsReceivableView
+              receivables={receivables}
+              schemaWarnings={schemaWarnings}
+              onAdd={addReceivable}
+              onPayment={registerReceivablePayment}
+              onInfocredStatus={updateInfocredStatus}
+            />
+          )}
+          {activeNav === "Recordatorios" && (
+            <RemindersView
+              reminders={activeReminders}
+              completed={remindersCompleted}
+              onToggle={toggleReminderCompleted}
+            />
+          )}
+          {activeNav === "Libros por curso" && (
+            <CourseBooksView
+              products={products}
+              students={students}
+              customers={customers}
+              sales={sales}
+              studentBookRecords={studentBookRecords}
+              onAddStudent={addStudent}
+              onAssignBook={assignBookToCourse}
+              onUnassignBook={unassignBookFromCourse}
+              onToggleBookRecord={toggleStudentBookRecord}
+            />
+          )}
           {activeNav === "Préstamos" && (
             <LoansView
               materials={materials}
@@ -1833,8 +2386,8 @@ function App() {
               onExportProducts={() =>
                 downloadCsv(
                   "productos.csv",
-                  ["id", "nombre", "categoria", "seccion", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
-                  products.map((item) => [item.id, item.name, item.category, reportGroup(item.category, item.section), item.purchaseCost || 0, item.price, item.stock, item.minStock, item.unit]),
+                  ["id", "nombre", "categoria", "seccion", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad", "cursos"],
+                  products.map((item) => [item.id, item.name, item.category, reportGroup(item.category, item.section), item.purchaseCost || 0, item.price, item.stock, item.minStock, item.unit, (item.bookCourses || []).join("|")]),
                 )
               }
               onExportCustomers={() =>
@@ -1853,13 +2406,30 @@ function App() {
               }
               onDownloadTemplate={(type) => {
                 const templates = {
-                  products: ["id", "nombre", "categoria", "seccion", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad"],
+                  products: ["id", "nombre", "categoria", "seccion", "costo_de_compra", "precio", "stock", "stock_minimo", "unidad", "cursos"],
                   customers: ["id", "nombre", "carnet", "telefono", "familia", "parentesco"],
                   materials: ["id", "nombre", "categoria", "ubicacion", "estado", "prestado_a", "devolucion"],
                 };
                 downloadCsv(`${type}-plantilla.csv`, templates[type], [templates[type].map(() => "")]);
               }}
               online={isSupabaseConfigured}
+              syncStatus={syncStatus}
+              schemaWarnings={schemaWarnings}
+              syncedRecordCounts={syncedRecordCounts}
+              onRetrySync={() => {
+                syncErrorShownRef.current = false;
+                forceFullSyncRef.current = true;
+                if (!cloudReadyRef.current || syncStatus === "schema") {
+                  cloudOmittedColumnsRef.current = {};
+                  localStorage.removeItem("vida-verdad-supabase-omitted-columns");
+                  setSyncStatus("loading");
+                  setCloudRetry((current) => current + 1);
+                } else setSyncVersion((current) => current + 1);
+              }}
+              theme={theme}
+              onToggleTheme={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
             />
           )}
         </div>
@@ -2436,6 +3006,9 @@ function App() {
       {selectedQr && (
         <QrModal item={selectedQr} onClose={() => setSelectedQr(null)} />
       )}
+      {qrSheetOpen && (
+        <QrSheetModal products={products} onClose={() => setQrSheetOpen(false)} />
+      )}
       {selectedSale && (
         <ReceiptModal
           sale={selectedSale}
@@ -2632,9 +3205,217 @@ function PaymentFields({ total = 0 }) {
     </>
   );
 }
+function CourseBooksView({
+  products,
+  students,
+  customers,
+  sales,
+  studentBookRecords,
+  onAddStudent,
+  onAssignBook,
+  onUnassignBook,
+  onToggleBookRecord,
+}) {
+  const courses = [
+    ...new Map(
+      [
+        ...students.map((student) => student.course),
+        ...products.flatMap((product) => product.bookCourses || []),
+      ]
+        .filter(Boolean)
+        .map((item) => [normalizedValue(item), item]),
+    ).values(),
+  ].sort((a, b) => a.localeCompare(b, "es"));
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [courseInput, setCourseInput] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const course = selectedCourse || courses[0] || "";
+  const courseStudents = students
+    .filter((student) => normalizedValue(student.course) === normalizedValue(course))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const courseBooks = products
+    .filter((product) => bookAssignedToCourse(product, course))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const bought = (studentId, productId) =>
+    studentHasPurchasedBook(studentId, productId, sales, studentBookRecords);
+  const assign = (event) => {
+    event.preventDefault();
+    if (!selectedProductId) return;
+    const assignedCourse = courseInput || course;
+    onAssignBook(selectedProductId, assignedCourse);
+    setSelectedCourse(assignedCourse);
+    setCourseInput("");
+  };
+  return (
+    <section className="course-books-view">
+      <div className="panel">
+        <PanelHeader
+          title="Libros asignados por curso"
+          detail="Elige los productos del inventario que corresponden a cada curso."
+        />
+        <div className="course-books-toolbar">
+          <label>
+            Curso para consultar
+            <select value={course} onChange={(event) => setSelectedCourse(event.target.value)}>
+              {!courses.length && <option value="">Registra estudiantes o asigna un libro</option>}
+              {courses.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <form className="course-book-assign" onSubmit={assign}>
+            <label>
+              Libro del inventario
+              <select
+                value={selectedProductId}
+                onChange={(event) => setSelectedProductId(event.target.value)}
+                required
+              >
+                <option value="">Seleccionar producto</option>
+                {products.map((product) => (
+                  <option value={product.id} key={product.id}>{product.name} · {product.id}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Asignar al curso
+              <input
+                value={courseInput || course}
+                onChange={(event) => setCourseInput(event.target.value)}
+                placeholder="Ej. 1ro Primaria A"
+                required
+              />
+            </label>
+            <button className="primary-button" type="submit"><Plus size={16} /> Asignar libro</button>
+          </form>
+          <div className="course-book-list">
+            {courseBooks.length ? courseBooks.map((book) => (
+              <div key={book.id}>
+                <span><strong>{book.name}</strong><small>{book.id} · {money(book.price)}</small></span>
+                <button className="icon-button" type="button" title="Quitar del curso" onClick={() => onUnassignBook(book.id, course)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )) : <p className="empty-state">Aún no hay libros asignados a este curso.</p>}
+          </div>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={!courseBooks.length}
+            onClick={() => printCourseBooks(course, courseBooks)}
+          >
+            <Printer size={16} /> Imprimir lista para familias
+          </button>
+        </div>
+      </div>
+
+      <div className="panel">
+        <PanelHeader
+          title="Estudiantes y avance de compra"
+          detail="El registro es individual y está vinculado a la familia responsable. Los libros pendientes son solo informativos."
+          action={courseStudents.length > 0 && courseBooks.length > 0 ? (
+            <button className="secondary-button" type="button" onClick={() => printCourseProgress(course, courseStudents, courseBooks, bought)}>
+              <Printer size={16} /> Imprimir control
+            </button>
+          ) : null}
+        />
+        {courseBooks.length && courseStudents.length ? (
+          <div className="course-progress-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Estudiante</th>
+                  <th>Familia / padre</th>
+                  {courseBooks.map((book) => <th key={book.id}>{book.name}</th>)}
+                  <th>Avance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courseStudents.map((student) => {
+                  const boughtCount = courseBooks.filter((book) => bought(student.id, book.id)).length;
+                  return (
+                    <tr key={student.id}>
+                      <td><strong>{student.name}</strong>{student.carnet && <small>{student.carnet}</small>}</td>
+                      <td>{student.guardianName || "—"}{student.family && <small>{student.family}</small>}</td>
+                      {courseBooks.map((book) => {
+                        const purchased = bought(student.id, book.id);
+                        const hasSale = sales.some((sale) =>
+                          sale.status !== "Anulada" && sale.studentId === student.id &&
+                          sale.items?.some((item) => item.id === book.id));
+                        const manualRecord = studentBookRecords.some((record) =>
+                          record.studentId === student.id && record.productId === book.id &&
+                          record.status !== "Anulado");
+                        return (
+                          <td key={book.id}>
+                            {hasSale ? (
+                              <span className="book-purchase-status purchased">Comprado</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className={`book-purchase-status ${purchased ? "purchased" : "pending"}`}
+                                onClick={() => onToggleBookRecord(student, book, !manualRecord)}
+                                title={manualRecord ? "Deshacer registro manual" : "Registrar compra anterior hecha fuera del sistema"}
+                              >
+                                {purchased ? "Comprado · manual" : "Pendiente"}
+                              </button>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td>{boughtCount}/{courseBooks.length}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="empty-state">
+            {!courseStudents.length ? "Registra estudiantes para consultar quién compró sus libros." : "Asigna los libros del curso para mostrar el avance."}
+          </p>
+        )}
+      </div>
+
+      <div className="panel">
+        <PanelHeader
+          title="Registrar estudiante"
+          detail="Cada alumno tiene su propio historial de libros, aunque comparta familia con otros."
+        />
+        {!customers.length && <p className="schema-warning-banner">Primero registra a la madre, padre o tutor en la sección Clientes.</p>}
+        <form className="course-student-form" onSubmit={onAddStudent}>
+          <label>Nombre completo<input name="name" required placeholder="Nombre del estudiante" /></label>
+          <label>Carnet / código (opcional)<input name="carnet" placeholder="Carnet de identidad" /></label>
+          <label>Curso<input name="course" required list="registered-courses" placeholder="Ej. 1ro Primaria A" /></label>
+          <datalist id="registered-courses">{courses.map((item) => <option key={item} value={item} />)}</datalist>
+          <label>Madre, padre o tutor
+            <select name="guardianId" required defaultValue="">
+              <option value="" disabled>Seleccionar familia</option>
+              {customers.map((customer) => (
+                <option value={customer.id} key={customer.id}>
+                  {customer.name}{customer.family ? ` · ${customer.family}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-button" type="submit" disabled={!customers.length}><Plus size={16} /> Registrar estudiante</button>
+        </form>
+        {students.length > 0 && (
+          <div className="course-student-list">
+            <strong>{students.length} estudiante(s) registrado(s)</strong>
+            <span>{students.map((student) => `${student.name} · ${student.course}`).join("  |  ")}</span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SaleView({
   products,
   customers,
+  students,
+  sales,
+  studentBookRecords,
+  selectedStudentId,
+  onStudentChange,
   categories,
   category,
   setCategory,
@@ -2659,6 +3440,7 @@ function SaleView({
   );
   const customerSuggestions = matchingCustomers.slice(0, 8);
   const selectedRecord = customers.find((item) => item.id === selectedCustomer);
+  const selectedStudent = students.find((item) => item.id === selectedStudentId);
   const chooseCustomer = (id) => {
     setSelectedCustomer(id);
     const record = customers.find((item) => item.id === id);
@@ -2701,21 +3483,33 @@ function SaleView({
         </div>
         <div className="product-grid">
           {products.map((product) => (
+            (() => {
+              const isCourseBook = Boolean(product.bookCourses?.length);
+              const alreadyPurchased = isCourseBook && selectedStudent &&
+                studentHasPurchasedBook(selectedStudent.id, product.id, sales, studentBookRecords);
+              const wrongCourse = isCourseBook && selectedStudent &&
+                !bookAssignedToCourse(product, selectedStudent.course);
+              const disabled = isCourseBook && (!selectedStudent || alreadyPurchased || wrongCourse);
+              return (
             <button
               type="button"
-              className="product-card"
+              className={`product-card ${disabled ? "book-product-disabled" : ""}`}
               key={product.id}
               onClick={() => addToCart(product)}
+              disabled={disabled}
             >
               <ProductIcon category={product.category} />
               <span>
                 <strong>{product.name}</strong>
                 <small>
                   {product.id} · {product.stock} disponibles
+                  {isCourseBook && ` · ${alreadyPurchased ? "Ya comprado" : wrongCourse ? "Otro curso" : product.bookCourses.join(", ")}`}
                 </small>
               </span>
               <b>{money(product.price)}</b>
             </button>
+              );
+            })()
           ))}
         </div>
       </div>
@@ -2747,6 +3541,7 @@ function SaleView({
                   aria-label={`Cantidad de ${item.name}`}
                   type="number"
                   min={item.unit === "cm" || item.unit === "m" ? "0.01" : "1"}
+                  max={item.bookCourses?.length ? "1" : undefined}
                   step={item.unit === "cm" || item.unit === "m" ? "0.01" : "1"}
                   value={item.quantity}
                   onChange={(event) =>
@@ -2821,6 +3616,23 @@ function SaleView({
               </button>
             </span>
           </label>
+          <label>
+            Estudiante que recibe los libros
+            <select
+              value={selectedStudentId}
+              onChange={(event) => onStudentChange(event.target.value)}
+            >
+              <option value="">Sin estudiante seleccionado</option>
+              {students.map((student) => (
+                <option value={student.id} key={student.id}>
+                  {student.name} · {student.course} · {student.guardianName || "Sin familia"}
+                </option>
+              ))}
+            </select>
+            <small className="form-note">
+              Obligatorio para libros asignados por curso; evita duplicados y atribuye la compra.
+            </small>
+          </label>
           {customerQuery && customerSuggestions.length > 0 && (
             <div className="customer-suggestions" role="listbox">
               {customerSuggestions.map((customer) => (
@@ -2874,6 +3686,7 @@ function InventoryView({
   onNewOrder,
   onReceiveOrder,
   onPrintOrder,
+  onPrintAllQrs,
 }) {
   const [reportStart, setReportStart] = useState("");
   const [reportEnd, setReportEnd] = useState("");
@@ -3005,10 +3818,21 @@ function InventoryView({
         detail="Uniformes, libros, fotocopias y útiles"
         defaultOpen={true}
         action={
-          <button className="primary-button small" onClick={onAdd}>
-            <Plus size={16} />
-            Nuevo producto
-          </button>
+          <span className="button-pair">
+            <button
+              className="secondary-button small"
+              type="button"
+              disabled={!products.length}
+              onClick={onPrintAllQrs}
+            >
+              <QrCode size={15} />
+              Imprimir todos los QRs
+            </button>
+            <button className="primary-button small" onClick={onAdd}>
+              <Plus size={16} />
+              Nuevo producto
+            </button>
+          </span>
         }
       >
         <div className="table-tools">
@@ -3645,7 +4469,23 @@ function SettingsView({
   onExportMaterials,
   onDownloadTemplate,
   online,
+  syncStatus,
+  schemaWarnings,
+  syncedRecordCounts,
+  onRetrySync,
+  theme,
+  onToggleTheme,
 }) {
+  const missingTables = schemaWarnings.filter((warning) => !warning.includes("."));
+  const missingColumns = schemaWarnings.filter((warning) => warning.includes("."));
+  const statusLabels = {
+    loading: "Conectando con Supabase…",
+    syncing: "Sincronizando cambios…",
+    synced: "Sincronizado con Supabase",
+    schema: "Supabase conectado; esquema incompleto",
+    error: "No se pudo sincronizar con Supabase",
+    local: "Modo local activo",
+  };
   return (
     <section className="panel lower-panel settings-view">
       <PanelHeader
@@ -3653,19 +4493,42 @@ function SettingsView({
         detail="Carga masiva y estado de conexión"
       />
       <div className="settings-status">
-        <span className={`status-dot ${online ? "" : "borrowed"}`} />
-        <strong>{online ? "Supabase conectado" : "Modo local activo"}</strong>
+        <span className={`status-dot ${syncStatus === "error" || !online ? "borrowed" : syncStatus === "schema" ? "schema-warning" : ""}`} />
+        <strong>{statusLabels[syncStatus] || statusLabels.local}</strong>
         <small>
           {online
-            ? "Los cambios se sincronizan entre dispositivos."
+            ? schemaWarnings?.length
+              ? `${missingTables.length ? `Faltan tablas: ${missingTables.join(", ")}. ` : ""}${missingColumns.length ? `Faltan columnas: ${missingColumns.join(", ")}. ` : ""}Los datos restantes se sincronizan; ejecuta supabase-schema.sql y vuelve a revisar el esquema para sincronizar también esos campos.`
+              : "La carga y cada guardado confirman errores de Supabase; si hay un fallo se indica aquí."
             : "Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para operar en línea."}
         </small>
+        {online && Number.isFinite(syncedRecordCounts?.products) && (
+          <small className="sync-count">
+            Confirmados en Supabase: {syncedRecordCounts.products} productos
+          </small>
+        )}
+        {online && (
+          <button className="secondary-button small" type="button" onClick={onRetrySync}>
+            <Upload size={14} />
+            {syncStatus === "error" || syncStatus === "schema" ? "Revisar conexión / esquema" : "Sincronizar ahora"}
+          </button>
+        )}
+      </div>
+      <div className="settings-theme">
+        <div>
+          <strong>Tema de la aplicación</strong>
+          <small>El tema elegido se conserva en este dispositivo.</small>
+        </div>
+        <button className="secondary-button" type="button" onClick={onToggleTheme}>
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          {theme === "dark" ? "Usar tema claro" : "Usar tema oscuro"}
+        </button>
       </div>
       <div className="import-grid">
         <CsvDataCard
           icon={PackagePlus}
           title="Productos para la venta"
-          description="id, nombre, categoria, seccion, costo_de_compra, precio, stock, stock_minimo, unidad"
+          description="id, nombre, categoria, seccion, costo_de_compra, precio, stock, stock_minimo, unidad, cursos"
           onImport={onImportProducts}
           onExport={onExportProducts}
           onTemplate={() => onDownloadTemplate("products")}
@@ -3687,6 +4550,156 @@ function SettingsView({
           onTemplate={() => onDownloadTemplate("materials")}
         />
       </div>
+    </section>
+  );
+}
+function AccountsReceivableView({
+  receivables,
+  schemaWarnings,
+  onAdd,
+  onPayment,
+  onInfocredStatus,
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("Todas");
+  const [paymentFor, setPaymentFor] = useState("");
+  const [paymentMode, setPaymentMode] = useState("total");
+  const totalOwed = receivables.reduce(
+    (sum, record) => sum + Math.max(0, Number(record.total) - Number(record.paid)),
+    0,
+  );
+  const visibleRecords = receivables.filter((record) => {
+    const balance = Number(record.total) - Number(record.paid);
+    const matchesFilter =
+      filter === "Todas" ||
+      (filter === "Con deuda" && balance > 0.001) ||
+      (filter === "Canceladas" && balance <= 0.001);
+    const text = `${record.guardianName} ${record.studentName} ${record.family} ${record.carnet} ${record.gestion} ${record.grade}`
+      .toLowerCase();
+    return matchesFilter && text.includes(query.trim().toLowerCase());
+  });
+  return (
+    <section className="receivables-view">
+      <div className="stats-grid receivables-stats">
+        <article className="stat-card">
+          <span className="stat-icon orange"><WalletCards size={18} /></span>
+          <div><p>Saldo pendiente total</p><strong>{money(totalOwed)}</strong></div>
+        </article>
+        <article className="stat-card">
+          <span className="stat-icon blue"><UsersRound size={18} /></span>
+          <div><p>Cuentas registradas</p><strong>{receivables.length}</strong></div>
+        </article>
+        <article className="stat-card">
+          <span className="stat-icon purple"><ShieldCheck size={18} /></span>
+          <div><p>Familias con deuda</p><strong>{receivables.filter((record) => Number(record.total) - Number(record.paid) > 0.001).length}</strong></div>
+        </article>
+      </div>
+      {schemaWarnings.includes("accounts_receivable") && (
+        <p className="schema-warning-banner">La conexión con Supabase está activa, pero las cuentas por cobrar aún no se sincronizan en la nube. Ejecuta <code>supabase-schema.sql</code> desde SQL Editor y luego pulsa “Revisar conexión / esquema” en Configuración.</p>
+      )}
+      <details className="panel receivable-create" open={receivables.length === 0}>
+        <summary>Registrar una cuenta por cobrar</summary>
+        <p className="form-note">Incluye deudas de la gestión actual o anteriores. Los abonos se registran aquí y nunca ingresan a Caja.</p>
+        <form className="receivable-form" onSubmit={onAdd}>
+          <label>Nombre del padre, madre o tutor<input name="guardianName" required /></label>
+          <label>Estudiante<input name="studentName" /></label>
+          <label>Curso / nivel<input name="grade" placeholder="Ej. 5to de primaria" /></label>
+          <label>Carnet de identidad<input name="carnet" /></label>
+          <label>Familia<input name="family" placeholder="Ej. Familia Pérez" /></label>
+          <label>Gestión de la deuda<input name="gestion" type="number" min="1900" max="2100" defaultValue={new Date().getFullYear()} required /></label>
+          <label>Importe total adeudado (Bs.)<input name="total" type="number" step="0.01" min="0.01" required /></label>
+          <label>Contrato<input name="contract" placeholder="Nro. / detalle / Sin contrato" /></label>
+          <label className="receivable-wide">Compromisos de pago<input name="commitment" placeholder="Fecha acordada, cuotas u otro compromiso" /></label>
+          <button className="primary-button" type="submit"><Plus size={16} />Registrar deuda</button>
+        </form>
+      </details>
+      <section className="panel receivable-list-panel">
+        <PanelHeader title="Cuentas y pagos" detail="Historial de abonos, saldos y situación INFOCRED" />
+        <div className="receivable-tools">
+          <div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar padre, estudiante, carnet o gestión" /></div>
+          <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filtrar cuentas">
+            <option>Todas</option><option>Con deuda</option><option>Canceladas</option>
+          </select>
+        </div>
+        {visibleRecords.length ? (
+          <div className="receivable-records">
+            {visibleRecords.map((record) => {
+              const balance = Math.max(0, Number(record.total) - Number(record.paid));
+              return (
+                <article className="receivable-record" key={record.id}>
+                  <div className="receivable-record-head">
+                    <div><strong>{record.guardianName}</strong><small>{record.studentName || "Estudiante no indicado"}{record.grade ? ` · ${record.grade}` : ""}</small></div>
+                    <span className={`receivable-badge ${balance <= 0.001 ? "paid" : "owing"}`}>{balance <= 0.001 ? "Cancelada" : "Con deuda"}</span>
+                  </div>
+                  <div className="receivable-facts">
+                    <span>Gestión <b>{record.gestion}</b></span>
+                    <span>Familia <b>{record.family || "—"}</b></span>
+                    <span>Carnet <b>{record.carnet || "—"}</b></span>
+                    <span>Contrato <b>{record.contract || "No indicado"}</b></span>
+                    <span>Compromiso <b>{record.commitment || "No indicado"}</b></span>
+                  </div>
+                  <div className="receivable-balance">
+                    <span>Total {money(record.total)}</span><span>Pagado {money(record.paid)}</span><strong>Saldo {money(balance)}</strong>
+                  </div>
+                  <div className="receivable-actions">
+                    <label>INFOCRED
+                      <select value={record.infocredStatus || "Pendiente"} onChange={(event) => onInfocredStatus(record.id, event.target.value)}>
+                        <option>Pendiente</option><option>Reportado</option><option>No corresponde</option>
+                      </select>
+                    </label>
+                    {balance > 0.001 && <button type="button" className="secondary-button small" onClick={() => { setPaymentFor(paymentFor === record.id ? "" : record.id); setPaymentMode("total"); }}><Banknote size={15} />Registrar pago</button>}
+                  </div>
+                  {paymentFor === record.id && balance > 0.001 && (
+                    <form className="receivable-payment-form" onSubmit={(event) => {
+                      event.preventDefault();
+                      const data = new FormData(event.currentTarget);
+                      const saved = onPayment(record.id, {
+                        mode: paymentMode,
+                        amount: Number(data.get("amount")),
+                        date: String(data.get("date") || ""),
+                        note: String(data.get("note") || ""),
+                      });
+                      if (saved) setPaymentFor("");
+                    }}>
+                      <label>Tipo de pago<select value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}><option value="total">Pago total · {money(balance)}</option><option value="partial">Pago parcial</option></select></label>
+                      <label>Importe (Bs.)<input key={paymentMode} name="amount" type="number" min="0.01" max={balance} step="0.01" disabled={paymentMode === "total"} defaultValue={paymentMode === "total" ? balance : ""} required /></label>
+                      <label>Fecha<input name="date" type="date" defaultValue={localDateString()} required /></label>
+                      <label>Nota<input name="note" placeholder="Referencia opcional" /></label>
+                      <button className="primary-button small" type="submit"><Check size={15} />Guardar abono</button>
+                    </form>
+                  )}
+                  {(record.paymentHistory || []).length > 0 && (
+                    <details className="payment-history">
+                      <summary>Ver {record.paymentHistory.length} abono(s)</summary>
+                      {record.paymentHistory.map((payment) => <div key={payment.id}><span>{payment.date} · {payment.mode === "total" ? "Pago total" : "Pago parcial"}{payment.note ? ` · ${payment.note}` : ""}</span><strong>{money(payment.amount)}</strong></div>)}
+                    </details>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : <div className="empty-state"><Receipt size={26} /><p>{receivables.length ? "No se encontraron cuentas con esos filtros." : "Todavía no hay cuentas por cobrar."}</p></div>}
+      </section>
+    </section>
+  );
+}
+function RemindersView({ reminders, onToggle }) {
+  return (
+    <section className="panel reminders-view">
+      <PanelHeader title="Recordatorios administrativos" detail="Avisos mensuales para las declaraciones y tareas del colegio" />
+      <p className="form-note">Se muestran desde tres días antes de la fecha límite y permanecen hasta marcarlos como realizados. La confirmación se guarda en este dispositivo.</p>
+      {reminders.length ? (
+        <div className="reminder-list">
+          {reminders.map((task) => (
+            <article className="reminder-item" key={`${task.period}:${task.id}`}>
+              <span className="reminder-date"><strong>{String(task.day).padStart(2, "0")}</strong><small>{new Date(`${task.period}-01T12:00:00`).toLocaleDateString("es-BO", { month: "short" })}</small></span>
+              <div><strong>{task.title}</strong><small>{task.office} · Cada día {task.day} del mes</small></div>
+              <span className={`reminder-status ${task.daysUntilDue < 0 ? "overdue" : ""}`}>{task.daysUntilDue < 0 ? `Vencido hace ${Math.abs(task.daysUntilDue)} día(s)` : task.daysUntilDue === 0 ? "Vence hoy" : `En ${task.daysUntilDue} día(s)`}</span>
+              <button className="secondary-button small" type="button" onClick={() => onToggle(task)}><Check size={15} />Marcar realizado</button>
+            </article>
+          ))}
+        </div>
+      ) : <div className="empty-state"><CalendarRange size={26} /><p>No hay recordatorios próximos. Las tareas aparecen tres días antes de su fecha.</p></div>}
     </section>
   );
 }
@@ -4164,6 +5177,30 @@ function QrModal({ item, onClose }) {
           <button className="primary-button" onClick={onClose}>
             Listo
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function QrSheetModal({ products, onClose }) {
+  return (
+    <div className="modal-backdrop qr-sheet-backdrop" onClick={onClose}>
+      <div className="modal qr-sheet-modal" onClick={(event) => event.stopPropagation()}>
+        <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">
+          <X size={18} />
+        </button>
+        <PanelHeader title="Etiquetas QR de inventario" detail={`${products.length} productos · Hoja A4 con códigos pequeños para etiquetar mercadería`} />
+        <div className="qr-sheet-preview qr-sheet-print-only">
+          {products.map((product) => (
+            <div className="qr-sheet-label" key={product.id}>
+              <QRCodeSVG value={product.id} size={110} marginSize={1} bgColor="#ffffff" fgColor="#000000" />
+              <span><strong>{product.name}</strong>{product.id}</span>
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="secondary-button" type="button" onClick={onClose}>Cancelar</button>
+          <button className="primary-button" type="button" onClick={() => printElement(".qr-sheet-print-only", "qr-sheet")}><QrCode size={16} />Imprimir hoja de QRs</button>
         </div>
       </div>
     </div>
