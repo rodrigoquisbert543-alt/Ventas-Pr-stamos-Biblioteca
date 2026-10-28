@@ -325,7 +325,7 @@ function printElement(selector, kind = "receipt") {
         );
   printWindow.document.open();
   printWindow.document.write(
-    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr-sheet" ? "A4 portrait" : kind === "qr" ? "auto" : "80mm auto"};margin:${kind === "qr-sheet" ? "8mm" : "0"}}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:${kind === "qr-sheet" ? "block" : "flex"};justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr-sheet" ? "0" : kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif;color:#17212b}.qr-print-only svg{display:block;width:210px;height:210px}.qr-sheet-print-only{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3mm}.qr-sheet-label{display:grid;grid-template-columns:20mm minmax(0,1fr);align-items:center;gap:2mm;min-height:27mm;padding:1mm;border:1px solid #ddd;break-inside:avoid;overflow:hidden}.qr-sheet-label svg{display:block;width:20mm;height:20mm}.qr-sheet-label span{min-width:0;overflow-wrap:anywhere;font-size:7pt;line-height:1.2}.qr-sheet-label strong{display:block;font-size:8pt;margin-bottom:1mm}.receipt-modal{width:72mm;max-width:72mm;padding:0;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-top{display:flex;align-items:center;gap:8px;background:#f7faf8;border-bottom:2px solid #1118a8;box-shadow:inset 4px 0 0 #e30613;padding:8px 6px 10px}.receipt-top>span{display:flex;flex:1;flex-direction:column;gap:3px}.receipt-top strong{display:block;font-size:12px;line-height:1.15}.receipt-top small{display:block;color:#1118a8;font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.receipt-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}.receipt-number{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px;align-items:start;padding:11px 0 9px;border-bottom:1px solid #e2e5ed;font-size:10px}.receipt-number span{font-weight:600;white-space:nowrap}.receipt-number small{min-width:0;text-align:right;font-size:8px;line-height:1.3;overflow-wrap:anywhere}.receipt-lines{display:flex;flex-direction:column}.receipt-lines>div{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:8px;padding:8px 0;border-bottom:1px solid #e2e5ed;font-size:10px;line-height:1.3}.receipt-lines>div>span{min-width:0;overflow-wrap:anywhere}.receipt-lines strong{display:block}.receipt-lines small{display:block;color:#667085;font-size:8px;margin-top:2px}.receipt-lines b{white-space:nowrap;font-size:10px}.receipt-total{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 9px;border-bottom:1px solid #e2e5ed}.receipt-total span{font-size:11px}.receipt-total strong{color:#176c67;font-size:20px;white-space:nowrap}.receipt-note{margin:12px 0 0;text-align:center;color:#667085;font-size:8px!important;line-height:1.45}.receipt-signature{page-break-inside:avoid;margin-top:16px;padding-top:10px;border-top:1px solid #e2e5ed}.signature-fields{display:block}.signature-line{position:relative;min-height:38px;border-bottom:1px solid #17212b;padding-top:24px}.signature-line span{position:absolute;top:6px;left:0;color:#667085;font-size:8px}.receipt-footer{display:flex;flex-direction:column;gap:3px;margin-top:16px;padding-top:8px;border-top:1px solid #e2e5ed;text-align:center;color:#667085;font-size:8px}.receipt-footer strong{color:#1118a8;font-size:9px;letter-spacing:.06em}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#1118a8;margin:5px 0 0}</style></head><body>${content}</body></html>`,
+    `<!doctype html><html><head><title>Comprobante Vida y Verdad</title><style>@page{size:${kind === "qr-sheet" ? "A4 portrait" : kind === "qr" ? "auto" : "80mm auto"};margin:${kind === "qr-sheet" ? "8mm" : "0"}}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}body{display:${kind === "qr-sheet" ? "block" : "flex"};justify-content:center;align-items:flex-start;min-height:100vh;padding:${kind === "qr-sheet" ? "0" : kind === "qr" ? "20mm" : "4mm"};font-family:Arial,sans-serif;color:#17212b}.qr-print-only svg{display:block;width:210px;height:210px}.qr-sheet-print-only{display:grid;grid-template-columns:repeat(6,30mm);grid-auto-rows:30mm;gap:2mm}.qr-sheet-label{display:flex;flex-direction:column;align-items:center;justify-content:center;width:30mm;height:30mm;padding:1mm;border:1px dashed #bbb;break-inside:avoid;overflow:hidden;text-align:center}.qr-sheet-label svg{display:block;width:21mm;height:21mm}.qr-sheet-label span{width:100%;overflow:hidden;font-size:5.5pt;line-height:1.1}.qr-sheet-label strong{display:block;font-size:6pt;max-height:2.3em;overflow:hidden}.receipt-modal{width:72mm;max-width:72mm;padding:0;box-shadow:none;background:#fff}.receipt-modal .close-button,.receipt-modal .modal-actions{display:none!important}.receipt-top{display:flex;align-items:center;gap:8px;background:#f7faf8;border-bottom:2px solid #1118a8;box-shadow:inset 4px 0 0 #e30613;padding:8px 6px 10px}.receipt-top>span{display:flex;flex:1;flex-direction:column;gap:3px}.receipt-top strong{display:block;font-size:12px;line-height:1.15}.receipt-top small{display:block;color:#1118a8;font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.receipt-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}.receipt-number{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px;align-items:start;padding:11px 0 9px;border-bottom:1px solid #e2e5ed;font-size:10px}.receipt-number span{font-weight:600;white-space:nowrap}.receipt-number small{min-width:0;text-align:right;font-size:8px;line-height:1.3;overflow-wrap:anywhere}.receipt-lines{display:flex;flex-direction:column}.receipt-lines>div{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:8px;padding:8px 0;border-bottom:1px solid #e2e5ed;font-size:10px;line-height:1.3}.receipt-lines>div>span{min-width:0;overflow-wrap:anywhere}.receipt-lines strong{display:block}.receipt-lines small{display:block;color:#667085;font-size:8px;margin-top:2px}.receipt-lines b{white-space:nowrap;font-size:10px}.receipt-total{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 9px;border-bottom:1px solid #e2e5ed}.receipt-total span{font-size:11px}.receipt-total strong{color:#176c67;font-size:20px;white-space:nowrap}.receipt-note{margin:12px 0 0;text-align:center;color:#667085;font-size:8px!important;line-height:1.45}.receipt-signature{page-break-inside:avoid;margin-top:16px;padding-top:10px;border-top:1px solid #e2e5ed}.signature-fields{display:block}.signature-line{position:relative;min-height:38px;border-bottom:1px solid #17212b;padding-top:24px}.signature-line span{position:absolute;top:6px;left:0;color:#667085;font-size:8px}.receipt-footer{display:flex;flex-direction:column;gap:3px;margin-top:16px;padding-top:8px;border-top:1px solid #e2e5ed;text-align:center;color:#667085;font-size:8px}.receipt-footer strong{color:#1118a8;font-size:9px;letter-spacing:.06em}.receipt-institution{text-align:center;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#1118a8;margin:5px 0 0}</style></head><body>${content}</body></html>`,
   );
   printWindow.document.close();
   printWindow.focus();
@@ -690,6 +690,10 @@ function App() {
   const [remindersCompleted, setRemindersCompleted] = useState(() =>
     readStorage("vida-verdad-reminders-completed", {}),
   );
+  const [customReminders, setCustomReminders] = useState(() =>
+    readStorage("vida-verdad-custom-reminders", []),
+  );
+  const [installPrompt, setInstallPrompt] = useState(null);
   const [syncStatus, setSyncStatus] = useState(
     isSupabaseConfigured ? "loading" : "local",
   );
@@ -761,6 +765,22 @@ function App() {
   useEffect(() => {
     salesRef.current = sales;
   }, [sales]);
+  useEffect(() => {
+    localStorage.setItem("vida-verdad-custom-reminders", JSON.stringify(customReminders));
+  }, [customReminders]);
+  useEffect(() => {
+    const capture = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const installed = () => setInstallPrompt(null);
+    window.addEventListener("beforeinstallprompt", capture);
+    window.addEventListener("appinstalled", installed);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", capture);
+      window.removeEventListener("appinstalled", installed);
+    };
+  }, []);
   useEffect(() => {
     localStorage.setItem(
       "vida-verdad-reminders-completed",
@@ -1966,6 +1986,15 @@ function App() {
       ),
     );
   };
+  const addCustomReminder = ({ title, date }) =>
+    setCustomReminders((current) => [
+      { id: `REC-${Date.now()}`, title, date, done: false, createdAt: new Date().toISOString() },
+      ...current,
+    ]);
+  const toggleCustomReminder = (id) =>
+    setCustomReminders((current) => current.map((item) => item.id === id ? { ...item, done: !item.done } : item));
+  const deleteCustomReminder = (id) =>
+    setCustomReminders((current) => current.filter((item) => item.id !== id));
   const toggleReminderCompleted = (task) => {
     const key = `${task.period}:${task.id}`;
     setRemindersCompleted((current) => ({
@@ -2063,8 +2092,8 @@ function App() {
         {name === "Historial" && sales.length > 0 && (
           <span className="nav-count">{sales.length}</span>
         )}
-        {name === "Recordatorios" && activeReminders.length > 0 && (
-          <span className="nav-count">{activeReminders.length}</span>
+        {name === "Recordatorios" && activeReminders.length + customReminders.filter((item) => !item.done).length > 0 && (
+          <span className="nav-count">{activeReminders.length + customReminders.filter((item) => !item.done).length}</span>
         )}
       </button>
     );
@@ -2093,6 +2122,15 @@ function App() {
         </nav>
         <div className="sidebar-bottom">
           <button
+            type="button"
+            onClick={() => {
+              setActiveNav("Configuración");
+              setMenuOpen(false);
+            }}
+          >
+            <Download size={18} />
+            Instalar aplicación
+          </button>          <button
             type="button"
             onClick={() => {
               setActiveNav("Configuración");
@@ -2190,7 +2228,19 @@ function App() {
           </section>
           {activeNav === "Resumen" && (
             <>
-              <div className="date-range-toolbar" style={{ marginBottom: 16 }}>
+              <CollapsiblePanel
+                title="Mis recordatorios"
+                detail="Anota lo que no quieres olvidar"
+                defaultOpen={true}
+              >
+                <CustomReminders
+                  compact
+                  items={customReminders}
+                  onAdd={addCustomReminder}
+                  onToggle={toggleCustomReminder}
+                  onDelete={deleteCustomReminder}
+                />
+              </CollapsiblePanel>              <div className="date-range-toolbar" style={{ marginBottom: 16 }}>
                 <div className="date-filter-block">
                   <div className="date-filter-header">
                     <strong className="date-range-title">Buscar por rango de fechas</strong>
@@ -2431,6 +2481,10 @@ function App() {
               reminders={activeReminders}
               completed={remindersCompleted}
               onToggle={toggleReminderCompleted}
+              customReminders={customReminders}
+              onAddCustom={addCustomReminder}
+              onToggleCustom={toggleCustomReminder}
+              onDeleteCustom={deleteCustomReminder}
             />
           )}
           {activeNav === "Libros por curso" && (
@@ -2469,6 +2523,13 @@ function App() {
           )}
           {activeNav === "Configuración" && (
             <SettingsView
+              installPrompt={installPrompt}
+              onInstall={async () => {
+                if (!installPrompt) return;
+                installPrompt.prompt();
+                await installPrompt.userChoice;
+                setInstallPrompt(null);
+              }}
               onImportProducts={(event) => importCsv(event, "products")}
               onImportCustomers={(event) => importCsv(event, "customers")}
               onImportMaterials={(event) => importCsv(event, "materials")}
@@ -4647,6 +4708,8 @@ function SettingsView({
   onRetrySync,
   theme,
   onToggleTheme,
+  installPrompt,
+  onInstall,
 }) {
   const missingTables = schemaWarnings.filter((warning) => !warning.includes("."));
   const missingColumns = schemaWarnings.filter((warning) => warning.includes("."));
@@ -4685,6 +4748,46 @@ function SettingsView({
             {syncStatus === "error" || syncStatus === "schema" ? "Revisar conexión / esquema" : "Sincronizar ahora"}
           </button>
         )}
+      </div>
+      <div className="install-card">
+        <div>
+          <strong>Instalar la aplicación</strong>
+          <small> Se instala como un programa real, con su propio icono y ventana, y también abre sin internet.</small>
+        </div>
+        {window.matchMedia("(display-mode: standalone)").matches ? (
+          <p className="form-note">✔ La aplicación ya está instalada en este dispositivo.</p>
+        ) : (
+          <button className="primary-button" type="button" disabled={!installPrompt} onClick={onInstall}>
+            <Download size={16} />
+            {installPrompt ? "Instalar en este dispositivo" : "Usa las instrucciones de abajo"}
+          </button>
+        )}
+        <div className="install-grid">
+          <div className="install-option">
+            <strong>Windows / Mac / Linux</strong>
+            <ol>
+              <li>Abre el sistema en Chrome o Edge.</li>
+              <li>Pulsa «Instalar en este dispositivo» (o el icono de instalar en la barra de direcciones).</li>
+              <li>Se crea el programa en el menú Inicio y en el escritorio.</li>
+            </ol>
+          </div>
+          <div className="install-option">
+            <strong>Android</strong>
+            <ol>
+              <li>Abre el sistema en Chrome.</li>
+              <li>Pulsa «Instalar en este dispositivo» o el menú ⋮ → «Instalar aplicación».</li>
+              <li>Aparece en tu pantalla de inicio y en el cajón de apps.</li>
+            </ol>
+          </div>
+          <div className="install-option">
+            <strong>iPhone / iPad</strong>
+            <ol>
+              <li>Abre el sistema en Safari.</li>
+              <li>Pulsa Compartir → «Añadir a pantalla de inicio».</li>
+              <li>Se abre como app a pantalla completa.</li>
+            </ol>
+          </div>
+        </div>
       </div>
       <div className="settings-theme">
         <div>
@@ -4855,9 +4958,54 @@ function AccountsReceivableView({
     </section>
   );
 }
-function RemindersView({ reminders, onToggle }) {
+function CustomReminders({ items, onAdd, onToggle, onDelete, compact = false }) {
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState("");
+  const today = localDateString();
+  const submit = (event) => {
+    event.preventDefault();
+    if (!title.trim()) return;
+    onAdd({ title: title.trim(), date });
+    setTitle("");
+    setDate("");
+  };
+  const sorted = [...items].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || "9999").localeCompare(b.date || "9999"));
+  const visible = compact ? sorted.filter((item) => !item.done).slice(0, 6) : sorted;
+  return (
+    <div className="custom-reminders">
+      <form className="custom-reminder-form" onSubmit={submit}>
+        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Escribe un recordatorio (ej. Pagar a la imprenta)" aria-label="Recordatorio" />
+        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="Fecha (opcional)" />
+        <button className="primary-button small" type="submit"><Plus size={15} /> Agregar</button>
+      </form>
+      {visible.length ? (
+        <div className="reminder-list">
+          {visible.map((item) => (
+            <article className={`reminder-item custom ${item.done ? "done" : ""}`} key={item.id}>
+              <span className="reminder-date"><CalendarRange size={18} /></span>
+              <div>
+                <strong>{item.title}</strong>
+                <small>{item.date ? `Para el ${new Date(`${item.date}T12:00:00`).toLocaleDateString("es-BO", { day: "2-digit", month: "long", year: "numeric" })}` : "Sin fecha"}</small>
+              </div>
+              <span className={`reminder-status ${!item.done && item.date && item.date < today ? "overdue" : ""}`}>
+                {item.done ? "Realizado" : item.date && item.date < today ? "Vencido" : item.date === today ? "Hoy" : "Pendiente"}
+              </span>
+              <span className="button-pair">
+                <button className="secondary-button small" type="button" onClick={() => onToggle(item.id)}><Check size={15} />{item.done ? "Reabrir" : "Realizado"}</button>
+                <button className="icon-action" type="button" aria-label="Eliminar recordatorio" onClick={() => onDelete(item.id)}><Trash2 size={14} /></button>
+              </span>
+            </article>
+          ))}
+        </div>
+      ) : <p className="form-note">No tienes recordatorios personales pendientes.</p>}
+    </div>
+  );
+}
+function RemindersView({ reminders, onToggle, customReminders, onAddCustom, onToggleCustom, onDeleteCustom }) {
   return (
     <section className="panel reminders-view">
+      <PanelHeader title="Mis recordatorios" detail="Escribe cualquier cosa que no quieras olvidar" />
+      <CustomReminders items={customReminders} onAdd={onAddCustom} onToggle={onToggleCustom} onDelete={onDeleteCustom} />
       <PanelHeader title="Recordatorios administrativos" detail="Avisos mensuales para las declaraciones y tareas del colegio" />
       <p className="form-note">Se muestran desde tres días antes de la fecha límite y permanecen hasta marcarlos como realizados. La confirmación se guarda en este dispositivo.</p>
       {reminders.length ? (
@@ -5355,16 +5503,42 @@ function QrModal({ item, onClose }) {
   );
 }
 function QrSheetModal({ products, onClose }) {
+  const [copies, setCopies] = useState(() =>
+    Object.fromEntries(products.map((product) => [product.id, Math.max(0, Math.round(Number(product.stock) || 0))])),
+  );
+  const [query, setQuery] = useState("");
+  const setAll = (getter) =>
+    setCopies(Object.fromEntries(products.map((product) => [product.id, getter(product)])));
+  const filtered = products.filter((product) =>
+    normalizedValue(`${product.name} ${product.id}`).includes(normalizedValue(query)),
+  );
+  const labels = products.flatMap((product) =>
+    Array.from({ length: Math.min(500, Math.max(0, Number(copies[product.id]) || 0)) }, (_, index) => ({ product, index })),
+  );
   return (
     <div className="modal-backdrop qr-sheet-backdrop" onClick={onClose}>
       <div className="modal qr-sheet-modal" onClick={(event) => event.stopPropagation()}>
         <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">
           <X size={18} />
         </button>
-        <PanelHeader title="Etiquetas QR de inventario" detail={`${products.length} productos · Hoja A4 con códigos pequeños para etiquetar mercadería`} />
+        <PanelHeader title="Etiquetas QR de inventario" detail={`${labels.length} etiquetas de 3 x 3 cm · Hoja A4, 6 por fila`} />
+        <div className="qr-copy-tools">
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar producto" aria-label="Buscar producto" />
+          <button type="button" className="secondary-button small" onClick={() => setAll((product) => Math.max(0, Math.round(Number(product.stock) || 0)))}>Según stock</button>
+          <button type="button" className="secondary-button small" onClick={() => setAll(() => 1)}>1 de cada uno</button>
+          <button type="button" className="secondary-button small" onClick={() => setAll(() => 0)}>Ninguno</button>
+        </div>
+        <div className="qr-copy-list">
+          {filtered.map((product) => (
+            <label className="qr-copy-row" key={product.id}>
+              <span><strong>{product.name}</strong><small>{product.id} · Stock: {product.stock}</small></span>
+              <input type="number" min="0" max="500" value={copies[product.id] ?? 0} onChange={(event) => setCopies((current) => ({ ...current, [product.id]: event.target.value }))} aria-label={`Copias de ${product.name}`} />
+            </label>
+          ))}
+        </div>
         <div className="qr-sheet-preview qr-sheet-print-only">
-          {products.map((product) => (
-            <div className="qr-sheet-label" key={product.id}>
+          {labels.map(({ product, index }) => (
+            <div className="qr-sheet-label" key={`${product.id}-${index}`}>
               <QRCodeSVG value={product.id} size={110} marginSize={1} bgColor="#ffffff" fgColor="#000000" />
               <span><strong>{product.name}</strong>{product.id}</span>
             </div>
@@ -5372,7 +5546,7 @@ function QrSheetModal({ products, onClose }) {
         </div>
         <div className="modal-actions">
           <button className="secondary-button" type="button" onClick={onClose}>Cancelar</button>
-          <button className="primary-button" type="button" onClick={() => printElement(".qr-sheet-print-only", "qr-sheet")}><QrCode size={16} />Imprimir hoja de QRs</button>
+          <button className="primary-button" type="button" disabled={!labels.length} onClick={() => printElement(".qr-sheet-print-only", "qr-sheet")}><QrCode size={16} />Imprimir {labels.length} etiquetas</button>
         </div>
       </div>
     </div>
