@@ -147,6 +147,8 @@ create table if not exists purchase_orders (
   created_at timestamptz not null default now()
 );
 
+alter table purchase_orders add column if not exists receipts jsonb not null default '[]'::jsonb;
+
 create table if not exists accounts_receivable (
   id text primary key,
   guardian_name text not null,

@@ -76,7 +76,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
     loans: loans.map(({ id, ...item }) => ({ id, action: item.action, material: item.material, material_id: item.materialId || null, teacher: item.teacher, teacher_id: item.teacherId || null, due: item.due || '', loaned_at: item.date })),
     teachers: teachers.map(({ id, ...item }) => ({ id, ...item })),
     customers: (customers || []).map(({ id, ...item }) => ({ id, ...item })),
-    purchase_orders: (purchaseOrders || []).map(({ id, ...item }) => ({ id, supplier: item.supplier, notes: item.notes || '', items: item.items || [], total: item.total || 0, paid: item.paid || 0, balance: item.balance || 0, status: item.status || 'Pendiente', ordered_at: item.date, received_at: item.receivedAt || null })),
+    purchase_orders: (purchaseOrders || []).map(({ id, ...item }) => ({ id, supplier: item.supplier, notes: item.notes || '', items: item.items || [], receipts: item.receipts || [], total: item.total || 0, paid: item.paid || 0, balance: item.balance || 0, status: item.status || 'Pendiente', ordered_at: item.date, received_at: item.receivedAt || null })),
     cash_movements: (cash.movements || []).map(({ id, ...item }) => ({ id, type: item.type, concept: item.concept, reason: item.reason || '', operation: item.operation || '', product_id: item.productId || null, quantity: Number(item.quantity || 0), amount: Number(item.amount || 0), payment: item.payment || null, cash_amount: Number(item.cashAmount || 0), qr_amount: Number(item.qrAmount || 0), moved_at: item.date || new Date().toISOString() })),
     accounts_receivable: (receivables || []).map(({ id, ...item }) => ({
       id,
@@ -156,11 +156,6 @@ function matchesRemoteValue(value, remoteValue) {
   return value === remoteValue
 }
 
-const optionalColumns = {
-  products: new Set(['section', 'book_courses']),
-  sales: new Set(['student_id']),
-}
-
 function missingColumnFromError(error) {
   const match = error.message?.match(
     /Could not find the '([^']+)' column of '([^']+)' in the schema cache/i,
@@ -212,20 +207,16 @@ export async function syncCloudState({
     for (let offset = 0; offset < pending.length; offset += UPSERT_BATCH_SIZE) {
       const batch = pending.slice(offset, offset + UPSERT_BATCH_SIZE)
       let { error } = await supabase.from(table).upsert(batch)
-      if (error) {
+      let currentBatch = batch
+      for (let retry = 0; error && retry < 6; retry += 1) {
         const missingColumn = missingColumnFromError(error)
-        if (
-          missingColumn?.table === table &&
-          optionalColumns[table]?.has(missingColumn.column)
-        ) {
-          nextOmittedColumns[table] ||= new Set()
-          nextOmittedColumns[table].add(missingColumn.column)
-          const retryBatch = batch.map((row) =>
-            withoutColumns(row, [missingColumn.column]),
-          )
-          const retryResult = await supabase.from(table).upsert(retryBatch)
-          error = retryResult.error
-        }
+        if (missingColumn?.table !== table) break
+        nextOmittedColumns[table] ||= new Set()
+        nextOmittedColumns[table].add(missingColumn.column)
+        currentBatch = currentBatch.map((row) =>
+          withoutColumns(row, [missingColumn.column]),
+        )
+        error = (await supabase.from(table).upsert(currentBatch)).error
       }
       if (error)
         throw new Error(`No se pudo sincronizar ${table} (${offset + 1}-${offset + batch.length} de ${pending.length} cambios): ${error.message}`)

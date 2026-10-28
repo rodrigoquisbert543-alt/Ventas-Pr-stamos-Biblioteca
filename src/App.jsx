@@ -89,6 +89,60 @@ function nextPurchaseOrderId(list) {
   }
   return id;
 }
+const orderTypes = {
+  original: { label: "Libro original", categories: ["Libros y útiles"] },
+  fotocopia: { label: "Libro fotocopia", categories: ["Fotocopias"] },
+  uniforme: { label: "Uniforme", categories: ["Uniformes"] },
+};
+const emptyOrderLine = (type = "original") => ({
+  type,
+  productId: "",
+  quantity: 1,
+  unitCost: 0,
+  pages: 0,
+  costPerPage: 0,
+  ringCost: 0,
+});
+const orderLineUnitCost = (line) =>
+  line.type === "fotocopia"
+    ? Number(line.pages || 0) * Number(line.costPerPage || 0) + Number(line.ringCost || 0)
+    : Number(line.unitCost || 0);
+const orderLineGood = (item) =>
+  Math.max(0, Number(item.received || 0) - Number(item.damaged || 0));
+const orderReceivedValue = (order) =>
+  order.items.reduce((sum, item) => sum + orderLineGood(item) * Number(item.unitCost || 0), 0);
+function nextReceiptId(order) {
+  return `${order.id}-R${String((order.receipts?.length || 0) + 1).padStart(2, "0")}`;
+}
+function orderStatus(items) {
+  if (!items.some((item) => Number(item.received) > 0)) return "Pendiente";
+  const short = items.some((item) => orderLineGood(item) < Number(item.quantity));
+  if (short) return "Recibido incompleto";
+  return items.some((item) => Number(item.received) > Number(item.quantity))
+    ? "Completado con excedente"
+    : "Completado";
+}
+function printSupplierStatement(supplier, orders, untilDate) {
+  const rows = [];
+  let receivedValue = 0;
+  let paid = 0;
+  orders.forEach((order) => {
+    paid += Number(order.paid || 0);
+    (order.receipts || []).forEach((receipt) => {
+      if (receipt.date > untilDate) return;
+      receipt.lines.forEach((line) => {
+        const good = Math.max(0, line.received - line.damaged);
+        const value = good * line.unitCost;
+        receivedValue += value;
+        rows.push(`<tr><td>${escapeHtml(new Date(receipt.date).toLocaleDateString("es-BO"))}</td><td>${escapeHtml(order.id)}</td><td>${escapeHtml(line.productName)}<br><small>${escapeHtml(orderTypes[line.type]?.label || "")}${line.note ? ` · ${escapeHtml(line.note)}` : ""}</small></td><td>${line.received}</td><td>${line.damaged}</td><td>${escapeHtml(money(line.unitCost))}</td><td>${escapeHtml(money(value))}</td></tr>`);
+      });
+    });
+  });
+  printCourseDocument(
+    `Detalle de entregas · ${supplier}`,
+    `<h1>Vida y Verdad Caranavi · Detalle de entregas</h1><p>Proveedor: <strong>${escapeHtml(supplier)}</strong> · Hasta: ${escapeHtml(new Date(untilDate).toLocaleString("es-BO"))}</p><table><thead><tr><th>Fecha</th><th>Pedido</th><th>Producto</th><th>Entregado</th><th>Dañado</th><th>Costo unit.</th><th>Valor aceptado</th></tr></thead><tbody>${rows.join("") || '<tr><td colspan="7">Sin entregas registradas</td></tr>'}</tbody></table><p><strong>Total entregado aceptado: ${escapeHtml(money(receivedValue))}</strong><br>Pagado a la fecha (pedidos del proveedor): ${escapeHtml(money(paid))}<br><strong>Saldo a pagar por lo entregado: ${escapeHtml(money(Math.max(0, receivedValue - paid)))}</strong></p>`,
+  );
+}
 function uniqueFamilies(customers) {
   return [
     ...new Set(
@@ -859,11 +913,13 @@ function App() {
               total: Number(order.total || 0),
               paid: Number(order.paid || 0),
               balance: Number(order.balance || 0),
+              receipts: Array.isArray(order.receipts) ? order.receipts : [],
               items: (order.items || []).map((item) => ({
                 ...item,
                 quantity: Number(item.quantity || 0),
                 unitCost: Number(item.unitCost || item.unit_cost || 0),
                 received: Number(item.received || 0),
+                damaged: Number(item.damaged || 0),
               })),
               date: order.ordered_at || order.date,
               receivedAt: order.received_at || order.receivedAt || "",
@@ -967,6 +1023,7 @@ function App() {
         .catch((error) => {
           if (attempt !== syncAttemptRef.current) return;
           setSyncStatus("error");
+          window.setTimeout(() => setSyncVersion((value) => value + 1), 15000);
           if (!syncErrorShownRef.current) {
             syncErrorShownRef.current = true;
             showToast(error.message || "No se pudieron sincronizar los cambios");
@@ -975,6 +1032,11 @@ function App() {
     }, 250);
     return () => window.clearTimeout(syncTimerRef.current);
   }, [products, sales, materials, loans, teachers, customers, cash, purchaseOrders, receivables, students, studentBookRecords, syncVersion, showToast]);
+  useEffect(() => {
+    const retryOnline = () => setSyncVersion((value) => value + 1);
+    window.addEventListener("online", retryOnline);
+    return () => window.removeEventListener("online", retryOnline);
+  }, []);
   useEffect(() => {
     const openQr = (event) => setSelectedQr(event.detail);
     window.addEventListener("open-material-qr", openQr);
@@ -1433,12 +1495,15 @@ function App() {
       (sum, item) => sum + item.quantity * item.unitCost,
       0,
     );
+    if (items.some((item) => !item.productId))
+      return showToast("Selecciona el producto en cada línea del pedido");
     const paid = Math.min(Number(data.get("paid") || 0), total);
     const order = {
       id: nextPurchaseOrderId(purchaseOrders),
       supplier,
       notes: String(data.get("notes") || "").trim(),
-      items: items.map((item) => ({ ...item, received: 0 })),
+      items: items.map((item) => ({ ...item, received: 0, damaged: 0 })),
+      receipts: [],
       total,
       paid,
       balance: total - paid,
@@ -1473,33 +1538,56 @@ function App() {
     const data = new FormData(event.currentTarget);
     const order = purchaseOrders.find((item) => item.id === data.get("orderId"));
     if (!order) return showToast("Pedido no encontrado");
+    const now = new Date().toISOString();
+    const lines = order.items.map((item, index) => {
+      const arrived = Math.max(Number(data.get(`received-${index}`) || 0), 0);
+      const damaged = Math.min(
+        Math.max(Number(data.get(`damaged-${index}`) || 0), 0),
+        arrived,
+      );
+      return {
+        index,
+        type: item.type,
+        productId: item.productId,
+        productName: item.productName,
+        unitCost: item.unitCost,
+        received: arrived,
+        damaged,
+        note: String(data.get(`note-${index}`) || "").trim(),
+      };
+    });
+    const hasMovement = lines.some((line) => line.received > 0 || line.note);
+    if (!hasMovement) return showToast("Indica al menos una cantidad recibida u observación");
     const received = order.items.map((item, index) => ({
       ...item,
-      received: Math.min(
-        Math.max(Number(data.get(`received-${index}`) || 0), 0),
-        item.quantity,
-      ),
+      received: Number(item.received || 0) + lines[index].received,
+      damaged: Number(item.damaged || 0) + lines[index].damaged,
     }));
     const extraPayment = Math.max(Number(data.get("payment") || 0), 0);
+    const receipt = {
+      id: nextReceiptId(order),
+      date: now,
+      note: String(data.get("receiptNote") || "").trim(),
+      payment: extraPayment,
+      lines: lines.filter((line) => line.received > 0 || line.note),
+    };
     const nextOrder = {
       ...order,
       items: received,
+      receipts: [...(order.receipts || []), receipt],
       paid: Math.min(order.total, order.paid + extraPayment),
       balance: Math.max(0, order.total - order.paid - extraPayment),
-      status: received.every((item) => item.received >= item.quantity)
-        ? "Completado"
-        : received.some((item) => item.received > 0)
-          ? "Recibido incompleto"
-          : order.status,
-      receivedAt: new Date().toISOString(),
+      status: orderStatus(received),
+      receivedAt: now,
     };
     setProducts((current) =>
       current.map((product) => {
-        const line = received.find((item) => item.productId === product.id);
-        const previous = order.items.find((item) => item.productId === product.id)?.received || 0;
-        const added = (line?.received || 0) - previous;
+        const added = lines
+          .filter((line) => line.productId === product.id)
+          .reduce((sum, line) => sum + line.received - line.damaged, 0);
+        const cost = lines.find((line) => line.productId === product.id && line.received > line.damaged)?.unitCost;
         return added > 0
-          ? { ...product, stock: product.stock + added, purchaseCost: line.unitCost }
+          ? { ...product, stock: Number(product.stock || 0) + added, purchaseCost: cost ?? product.purchaseCost }
           : product;
       }),
     );
@@ -2285,6 +2373,7 @@ function App() {
                 setModal("stock");
               }}
               onNewOrder={() => setModal("purchaseOrder")}
+              onSupplierStatement={() => setModal("supplierStatement")}
               onReceiveOrder={(order) => {
                 setEditingPurchaseOrder(order);
                 setModal("receiveOrder");
@@ -2733,6 +2822,12 @@ function App() {
             setEditingPurchaseOrder(null);
             setModal(null);
           }}
+        />
+      )}
+      {modal === "supplierStatement" && (
+        <SupplierStatementModal
+          purchaseOrders={purchaseOrders}
+          onClose={() => setModal(null)}
         />
       )}
       {printPurchaseOrder && (
@@ -3684,7 +3779,7 @@ function InventoryView({
   onEdit,
   onStock,
   onNewOrder,
-  onReceiveOrder,
+  onSupplierStatement,  onReceiveOrder,
   onPrintOrder,
   onPrintAllQrs,
 }) {
@@ -3786,9 +3881,14 @@ function InventoryView({
         detail="Control de pedidos, entregas parciales y pagos"
         defaultOpen={false}
         action={
-          <button className="primary-button small" type="button" onClick={onNewOrder}>
-            <Plus size={15} /> Nuevo pedido
-          </button>
+          <span className="button-pair">
+            <button className="secondary-button small" type="button" disabled={!purchaseOrders.length} onClick={onSupplierStatement}>
+              <FileText size={15} /> Detalle para pago
+            </button>
+            <button className="primary-button small" type="button" onClick={onNewOrder}>
+              <Plus size={15} /> Nuevo pedido
+            </button>
+          </span>
         }
       >
         {purchaseOrders.length ? purchaseOrders.map((order) => (
@@ -3796,7 +3896,9 @@ function InventoryView({
             <span>
               <strong>{order.id} · {order.supplier}</strong>
               <small>
-                {order.status} · {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos · Saldo {money(order.balance)}
+                {order.status} · {order.items.reduce((sum, item) => sum + item.received, 0)} de {order.items.reduce((sum, item) => sum + item.quantity, 0)} recibidos
+                {order.items.some((item) => item.damaged > 0) ? ` · ${order.items.reduce((sum, item) => sum + (item.damaged || 0), 0)} dañados` : ""}
+                {` · ${(order.receipts || []).length} recepción(es) · Saldo ${money(order.balance)}`}
               </small>
             </span>
             <b>{money(order.total)}</b>
@@ -3997,51 +4099,74 @@ function InventoryView({
 }
 
 function PurchaseOrderModal({ products, onSubmit, onClose }) {
-  const [lines, setLines] = useState([{ productId: products[0]?.id || "", quantity: 1, unitCost: products[0]?.purchaseCost || 0 }]);
-  const updateLine = (index, field, value) => setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: field === "productId" ? value : Number(value) } : line));
+  const [lines, setLines] = useState([emptyOrderLine()]);
+  const optionsFor = (type) => {
+    const matches = products.filter((product) => orderTypes[type].categories.includes(product.category));
+    return matches.length ? matches : products;
+  };
+  const updateLine = (index, field, value) => setLines((current) => current.map((line, lineIndex) => {
+    if (lineIndex !== index) return line;
+    if (field === "type") return { ...emptyOrderLine(value), quantity: line.quantity };
+    if (field === "productId") {
+      const product = products.find((item) => item.id === value);
+      return { ...line, productId: value, unitCost: line.type === "fotocopia" ? line.unitCost : Number(product?.purchaseCost || 0) };
+    }
+    return { ...line, [field]: Number(value) };
+  }));
+  const orderTotal = lines.reduce((sum, line) => sum + Number(line.quantity || 0) * orderLineUnitCost(line), 0);
   return (
     <div className="modal-backdrop">
-      <form className="modal form-modal purchase-order-modal" onSubmit={(event) => { event.preventDefault(); event.currentTarget.elements.items.value = JSON.stringify(lines.filter((line) => line.productId && line.quantity > 0).map((line) => ({ ...line, productName: products.find((product) => product.id === line.productId)?.name || "", unit: products.find((product) => product.id === line.productId)?.unit || "und." }))); onSubmit(event); }}>
+      <form className="modal form-modal purchase-order-modal" onSubmit={(event) => {
+        event.preventDefault();
+        const valid = lines.filter((line) => line.productId && line.quantity > 0).map((line) => {
+          const product = products.find((item) => item.id === line.productId);
+          return {
+            ...line,
+            unitCost: orderLineUnitCost(line),
+            productName: product?.name || "",
+            unit: product?.unit || "und.",
+          };
+        });
+        event.currentTarget.elements.items.value = JSON.stringify(valid);
+        onSubmit(event);
+      }}>
         <button type="button" className="close-button" onClick={onClose}><X size={18} /></button>
         <div className="modal-icon"><ClipboardList size={22} /></div>
         <h2>Nuevo pedido a proveedor</h2>
         <label>Proveedor<input required name="supplier" placeholder="Nombre del proveedor" /></label>
         <div className="purchase-order-lines">
           {lines.map((line, index) => (
-            <div className="purchase-order-line" key={`${index}-${line.productId}`}>
+            <div className="purchase-order-card" key={index}>
+              <div className="order-type-tabs" role="tablist">
+                {Object.entries(orderTypes).map(([type, config]) => (
+                  <button type="button" key={type} className={line.type === type ? "active" : ""} onClick={() => updateLine(index, "type", type)}>{config.label}</button>
+                ))}
+                <button type="button" className="icon-action" aria-label="Quitar línea" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}><Trash2 size={14} /></button>
+              </div>
               <select value={line.productId} onChange={(event) => updateLine(index, "productId", event.target.value)}>
                 <option value="">Producto</option>
-                {products.map((product) => <option value={product.id} key={product.id}>{product.name} · {product.unit || "und."}</option>)}
+                {optionsFor(line.type).map((product) => <option value={product.id} key={product.id}>{product.name} · {product.unit || "und."}</option>)}
               </select>
-              <input 
-                type="number" 
-                min="0" 
-                step="any" 
-                value={line.quantity} 
-                onChange={(event) => updateLine(index, "quantity", event.target.value)} 
-                aria-label="Cantidad pedida" 
-              />
-
-              <input 
-                type="number" 
-                min="0" 
-                step="any" 
-                value={line.unitCost} 
-                onChange={(event) => updateLine(index, "unitCost", event.target.value)} 
-                aria-label="Costo unitario" 
-              />
-
-              <button 
-                type="button" 
-                className="icon-action" 
-                onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}
-                >
-                <Trash2 size={14} />
-              </button>
+              <div className="order-fields">
+                <label>Cantidad<input type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} /></label>
+                {line.type === "fotocopia" ? (
+                  <>
+                    <label>Hojas por libro<input type="number" min="0" step="any" value={line.pages} onChange={(event) => updateLine(index, "pages", event.target.value)} /></label>
+                    <label>Costo por hoja<input type="number" min="0" step="any" value={line.costPerPage} onChange={(event) => updateLine(index, "costPerPage", event.target.value)} /></label>
+                    <label>Anillado por libro<input type="number" min="0" step="any" value={line.ringCost} onChange={(event) => updateLine(index, "ringCost", event.target.value)} /></label>
+                  </>
+                ) : (
+                  <label>Costo por unidad<input type="number" min="0" step="any" value={line.unitCost} onChange={(event) => updateLine(index, "unitCost", event.target.value)} /></label>
+                )}
+              </div>
+              <small className="order-line-total">
+                {line.type === "fotocopia" ? `Costo por libro: ${money(orderLineUnitCost(line))} · ` : ""}Subtotal: {money(line.quantity * orderLineUnitCost(line))}
+              </small>
             </div>
           ))}
         </div>
-        <button type="button" className="secondary-button small" onClick={() => setLines((current) => [...current, { productId: products[0]?.id || "", quantity: 1, unitCost: products[0]?.purchaseCost || 0 }])}><Plus size={14} /> Añadir producto</button>
+        <button type="button" className="secondary-button small" onClick={() => setLines((current) => [...current, emptyOrderLine()])}><Plus size={14} /> Añadir producto</button>
+        <p className="form-note"><strong>Total del pedido: {money(orderTotal)}</strong></p>
         <label>Adelanto o pago inicial<input name="paid" type="number" min="0" step="0.01" defaultValue="0" /></label>
         <label>Notas<input name="notes" placeholder="Condiciones o fecha prometida" /></label>
         <input type="hidden" name="items" />
@@ -4058,12 +4183,19 @@ function ReceiveOrderModal({ order, onSubmit, onClose }) {
         <button type="button" className="close-button" onClick={onClose}><X size={18} /></button>
         <div className="modal-icon"><PackagePlus size={22} /></div>
         <h2>Recibir pedido {order.id}</h2>
-        <p className="form-note">Proveedor: {order.supplier}. Registra solo lo que llegó.</p>
+        <p className="form-note">Proveedor: {order.supplier}. Registra lo que llegó ahora (puede ser más o menos de lo pedido) y cuántas piezas vinieron dañadas.</p>
         {order.items.map((item, index) => (
-          <label key={item.productId}>{item.productName} · pedido: {item.quantity} {item.unit}
-            <input name={`received-${index}`} type="number" min="0" max={item.quantity} step="0.01" defaultValue={item.received} />
-          </label>
+          <div className="purchase-order-card" key={index}>
+            <strong>{item.productName}</strong>
+            <small>{orderTypes[item.type]?.label || "Producto"} · pedido: {item.quantity} {item.unit} · ya recibido: {item.received || 0}{item.damaged ? ` (${item.damaged} dañados)` : ""} · pendiente: {Math.max(0, item.quantity - orderLineGood(item))}</small>
+            <div className="order-fields">
+              <label>Llegó ahora<input name={`received-${index}`} type="number" min="0" step="any" defaultValue="0" /></label>
+              <label>De ellos, dañados<input name={`damaged-${index}`} type="number" min="0" step="any" defaultValue="0" /></label>
+              <label>Observación<input name={`note-${index}`} placeholder="Opcional" /></label>
+            </div>
+          </div>
         ))}
+        <label>Nota de la entrega<input name="receiptNote" placeholder="Ej. Entregó Juan, faltan 5 para el viernes" /></label>
         <label>Pago adicional<input name="payment" type="number" min="0" step="0.01" defaultValue="0" /></label>
         <input type="hidden" name="orderId" value={order.id} />
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancelar</button><button className="primary-button" type="submit"><Check size={17} /> Registrar recepción</button></div>
@@ -4081,7 +4213,7 @@ function PurchaseOrderPrint({ order, onClose }) {
         <div className="receipt-number"><span>{order.id}</span><small>{new Date(order.date).toLocaleString("es-BO")}</small></div>
         <p className="receipt-note"><strong>Proveedor:</strong> {order.supplier}<br />Estado: {order.status}</p>
         <div className="receipt-lines">
-          {order.items.map((item) => <div key={item.productId}><span><strong>{item.productName}</strong><small>{item.quantity} {item.unit} x {money(item.unitCost)}</small></span><b>{money(item.quantity * item.unitCost)}</b></div>)}
+          {order.items.map((item, index) => <div key={index}><span><strong>{item.productName}</strong><small>{orderTypes[item.type]?.label || ""} · {item.quantity} {item.unit} x {money(item.unitCost)}{item.type === "fotocopia" ? ` (${item.pages} hojas x ${money(item.costPerPage)} + anillado ${money(item.ringCost)})` : ""}</small></span><b>{money(item.quantity * item.unitCost)}</b></div>)}
         </div>
         <div className="receipt-total"><span>Total</span><strong>{money(order.total)}</strong></div>
         <p className="receipt-note">Adelanto/pagado: {money(order.paid)}<br />Saldo: {money(order.balance)}<br />{order.notes}</p>
@@ -4090,6 +4222,46 @@ function PurchaseOrderPrint({ order, onClose }) {
     </div>
   );
 }
+function SupplierStatementModal({ purchaseOrders, onClose }) {
+  const suppliers = [...new Set(purchaseOrders.map((order) => order.supplier))];
+  const [supplier, setSupplier] = useState(suppliers[0] || "");
+  const orders = purchaseOrders.filter((order) => order.supplier === supplier);
+  const receipts = orders.flatMap((order) => (order.receipts || []).map((receipt) => ({ ...receipt, orderId: order.id })))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const receivedValue = orders.reduce((sum, order) => sum + orderReceivedValue(order), 0);
+  const paid = orders.reduce((sum, order) => sum + Number(order.paid || 0), 0);
+  return (
+    <div className="modal-backdrop">
+      <div className="modal form-modal purchase-order-modal">
+        <button type="button" className="close-button" onClick={onClose}><X size={18} /></button>
+        <div className="modal-icon"><FileText size={22} /></div>
+        <h2>Detalle de entregas para pago</h2>
+        <label>Proveedor
+          <select value={supplier} onChange={(event) => setSupplier(event.target.value)}>
+            {suppliers.map((name) => <option key={name}>{name}</option>)}
+          </select>
+        </label>
+        <div className="receipt-lines">
+          {receipts.length ? receipts.map((receipt) => (
+            <div key={receipt.id}>
+              <span>
+                <strong>{receipt.orderId} · {new Date(receipt.date).toLocaleDateString("es-BO")}</strong>
+                <small>{receipt.lines.map((line) => `${line.productName}: ${line.received}${line.damaged ? ` (${line.damaged} dañados)` : ""}`).join(" · ")}{receipt.note ? ` — ${receipt.note}` : ""}</small>
+              </span>
+              <b>{money(receipt.lines.reduce((sum, line) => sum + Math.max(0, line.received - line.damaged) * line.unitCost, 0))}</b>
+            </div>
+          )) : <p className="form-note">Este proveedor aún no tiene entregas registradas.</p>}
+        </div>
+        <p className="form-note">Entregado aceptado: <strong>{money(receivedValue)}</strong> · Pagado: {money(paid)} · <strong>Saldo por lo entregado: {money(Math.max(0, receivedValue - paid))}</strong></p>
+        <div className="modal-actions">
+          <button type="button" className="secondary-button" onClick={onClose}>Cerrar</button>
+          <button type="button" className="primary-button" disabled={!supplier} onClick={() => printSupplierStatement(supplier, orders, new Date().toISOString())}><FileText size={16} /> Imprimir detalle</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomerView({ customers, sales, onImport, onAdd, onEdit }) {
   const [query, setQuery] = useState("");
   const filteredCustomers = customers.filter((customer) =>
