@@ -1155,6 +1155,7 @@ function App() {
         status: "Disponible",
         borrower: "",
         due: "",
+        createdAt: new Date().toISOString(),
       };
       setMaterials((current) => [...current, material]);
       setSelectedQr(material);
@@ -1749,6 +1750,7 @@ function App() {
             phone: row.telefono || row.phone || "",
             family: row.familia || row.family || "",
             relation: row.parentesco || row.relacion || row.relation || "",
+            createdAt: new Date().toISOString(),
           }))
           .filter((item) => item.name);
         setCustomers((current) => {
@@ -1780,6 +1782,7 @@ function App() {
             status: row.estado || row.status || "Disponible",
             borrower: row.prestado_a || row.borrower || "",
             due: row.devolucion || row.due || "",
+            createdAt: new Date().toISOString(),
           }))
           .filter((item) => item.name && item.location);
         setMaterials((current) => [...current, ...candidates]);
@@ -3093,6 +3096,7 @@ function App() {
               phone: data.get("phone") || "",
               family: String(data.get("family") || "").trim(),
               relation: String(data.get("relation") || "").trim(),
+              createdAt: new Date().toISOString(),
             };
             if (customers.some((item) => sameCustomer(item, customer))) {
               showToast("Ese cliente ya está registrado");
@@ -3223,6 +3227,7 @@ function App() {
                 id: `DOC-${String(current.length + 1).padStart(3, "0")}`,
                 name: data.get("name"),
                 role: data.get("role"),
+                createdAt: new Date().toISOString(),
               },
             ]);
             setModal(null);

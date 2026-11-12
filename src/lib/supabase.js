@@ -10,6 +10,11 @@ export const isSupabaseConfigured = Boolean(supabase)
 
 const PAGE_SIZE = 500
 const UPSERT_BATCH_SIZE = 250
+const LEGACY_CREATED_AT = '1970-01-01T00:00:00.000Z'
+
+function createdAtFor(item) {
+  return item.created_at || item.createdAt || LEGACY_CREATED_AT
+}
 
 async function loadTable(table) {
   const records = []
@@ -58,7 +63,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       purchase_cost: Number(purchaseCost || 0),
       section: item.section || '',
       book_courses: bookCourses || [],
-      created_at: created_at || createdAt || new Date().toISOString(),
+      created_at: created_at || createdAt || LEGACY_CREATED_AT,
     })),
     sales: sales.map(({ id, ...item }) => ({
       id,
@@ -80,10 +85,32 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       sold_at: item.date || new Date().toISOString(),
       items: Array.isArray(item.items) ? item.items : [],
     })),
-    materials: materials.map(({ id, ...item }) => ({ id, ...item })),
+    materials: materials.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category || 'Otros',
+      location: item.location || '',
+      status: item.status || 'Disponible',
+      borrower: item.borrower || '',
+      due: item.due || '',
+      created_at: createdAtFor(item),
+    })),
     loans: loans.map(({ id, ...item }) => ({ id, action: item.action, material: item.material, material_id: item.materialId || null, teacher: item.teacher, teacher_id: item.teacherId || null, due: item.due || '', loaned_at: item.date })),
-    teachers: teachers.map(({ id, ...item }) => ({ id, ...item })),
-    customers: (customers || []).map(({ id, ...item }) => ({ id, ...item })),
+    teachers: teachers.map((item) => ({
+      id: item.id,
+      name: item.name,
+      role: item.role || '',
+      created_at: createdAtFor(item),
+    })),
+    customers: (customers || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      carnet: item.carnet || '',
+      phone: item.phone || '',
+      family: item.family || '',
+      relation: item.relation || '',
+      created_at: createdAtFor(item),
+    })),
     purchase_orders: (purchaseOrders || []).map(({ id, ...item }) => ({ id, supplier: item.supplier, notes: item.notes || '', items: item.items || [], receipts: item.receipts || [], total: item.total || 0, paid: item.paid || 0, balance: item.balance || 0, status: item.status || 'Pendiente', ordered_at: item.date, received_at: item.receivedAt || null })),
     cash_movements: (cash.movements || []).map(({ id, ...item }) => ({ id, type: item.type, concept: item.concept, reason: item.reason || '', operation: item.operation || '', product_id: item.productId || null, quantity: Number(item.quantity || 0), amount: Number(item.amount || 0), payment: item.payment || null, cash_amount: Number(item.cashAmount || 0), qr_amount: Number(item.qrAmount || 0), status: item.status || 'Vigente', voided_at: item.voidedAt || null, moved_at: item.date || new Date().toISOString() })),
     accounts_receivable: (receivables || []).map(({ id, ...item }) => ({
@@ -105,7 +132,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       follow_up_notes: item.followUpNotes || '',
       follow_up_history: item.followUpHistory || [],
       whatsapp_message: item.whatsappMessage || '',
-      created_at: item.createdAt || new Date().toISOString(),
+      created_at: createdAtFor(item),
     })),
     app_settings: [
       { id: 'cash', value: { opening: Number(cash.opening || 0) } },
@@ -119,7 +146,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       guardian_id: student.guardianId || null,
       guardian_name: student.guardianName || '',
       family: student.family || '',
-      created_at: student.createdAt || new Date().toISOString(),
+      created_at: createdAtFor(student),
     })),
     student_book_records: (studentBookRecords || []).map((record) => ({
       id: record.id,
@@ -127,7 +154,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       product_id: record.productId,
       status: record.status || 'Comprado',
       source: record.source || 'Anterior al sistema',
-      purchased_at: record.purchasedAt || new Date().toISOString(),
+      purchased_at: record.purchasedAt || LEGACY_CREATED_AT,
     })),
     custom_reminders: (customReminders || []).map((reminder) => ({
       id: reminder.id,
@@ -135,7 +162,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       due_date: reminder.date || '',
       done: Boolean(reminder.done),
       deleted: Boolean(reminder.deleted),
-      created_at: reminder.createdAt || new Date().toISOString(),
+      created_at: createdAtFor(reminder),
     })),
   }
 }
