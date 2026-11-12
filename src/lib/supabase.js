@@ -56,6 +56,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       ...item,
       min_stock: Number(minStock ?? 5),
       purchase_cost: Number(purchaseCost || 0),
+      section: item.section || '',
       book_courses: bookCourses || [],
       created_at: created_at || createdAt || new Date().toISOString(),
     })),
