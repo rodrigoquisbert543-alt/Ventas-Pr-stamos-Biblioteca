@@ -81,17 +81,41 @@
   overflow-wrap: anywhere;
 }
 
+.auth-card .auth-message {
+  margin: 0;
+  color: #175cd3;
+  overflow-wrap: anywhere;
+}
+
+.auth-forgot,
+.auth-cancel {
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: #1118a8;
+  text-decoration: underline;
+}
+
+.auth-protected {
+  min-height: 100vh;
+}
+
 .auth-session-bar {
   min-height: 40px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 16px;
   padding: 4px 24px;
   border-bottom: 1px solid #e2e5ed;
   background: #fffdf9;
   color: #667085;
   font-size: 13px;
+}
+
+.auth-session-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .auth-session-bar button {
@@ -102,13 +126,37 @@
   color: #17212b;
 }
 
+.auth-password-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 33, 43, 0.45);
+}
+
+.auth-password-overlay .auth-card {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
 @media (max-width: 480px) {
   .auth-card {
     padding: 22px;
   }
 
   .auth-session-bar {
-    justify-content: space-between;
-    padding-inline: 12px;
+    gap: 8px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .auth-session-actions {
+    gap: 4px;
+  }
+
+  .auth-session-bar button {
+    padding: 5px 6px;
+    font-size: 12px;
   }
 }

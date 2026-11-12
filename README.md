@@ -5,8 +5,8 @@ Sistema para ventas escolares en bolivianos, inventario, recibos, caja, QR y con
 ## Supabase
 
 1. Crea un proyecto en [Supabase](https://supabase.com/).
-2. En **Authentication > Users**, invita o crea `rodrigoquisbert543@gmail.com` y establece la contraseña directamente en Supabase. Desactiva los registros públicos.
-3. Para el informe de caja, invita también `rodrigoquisbert543+reportes@gmail.com`. Es una cuenta separada, destinada únicamente a consultar por RPC las ventas y movimientos del día actual. No puede usar la aplicación ni leer las tablas directamente.
+2. En **Authentication > Users**, invita `rodrigoquisbert543@gmail.com`. Abre la invitación desde la app y usa **Cambiar contraseña** para definir una clave; no la compartas por chat. Desactiva los registros públicos.
+3. Para el informe de caja, invita también `rodrigoquisbert543+reportes@gmail.com`. Al abrir el enlace, la app muestra solo el formulario para definir la contraseña de esa cuenta. Es una cuenta separada, destinada únicamente a consultar por RPC las ventas y movimientos del día actual. No puede usar la aplicación ni leer las tablas directamente.
 4. Ejecuta [supabase-schema.sql](supabase-schema.sql) en el SQL Editor. Las políticas permiten acceso de la app solo a la cuenta autorizada; `anon` no tiene permisos sobre las tablas.
 5. Copia `.env.example` como `.env.local` y coloca la URL y la clave `anon`/publishable pública del proyecto. Nunca coloques la clave `service_role` en la app ni en Apps Script.
 6. Reinicia `npm run dev` e inicia sesión en cada dispositivo con la cuenta autorizada.
