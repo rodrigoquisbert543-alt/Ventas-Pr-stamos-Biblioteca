@@ -220,28 +220,93 @@ alter table loans add column if not exists teacher_id text;
 alter table loans add column if not exists due text not null default '';
 
 drop policy if exists "app access products" on products;
-create policy "app access products" on products for all to anon using (true) with check (true);
+create policy "app access products" on products for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access sales" on sales;
-create policy "app access sales" on sales for all to anon using (true) with check (true);
+create policy "app access sales" on sales for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access materials" on materials;
-create policy "app access materials" on materials for all to anon using (true) with check (true);
+create policy "app access materials" on materials for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access teachers" on teachers;
-create policy "app access teachers" on teachers for all to anon using (true) with check (true);
+create policy "app access teachers" on teachers for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access customers" on customers;
-create policy "app access customers" on customers for all to anon using (true) with check (true);
+create policy "app access customers" on customers for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access students" on students;
-create policy "app access students" on students for all to anon using (true) with check (true);
+create policy "app access students" on students for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access student book records" on student_book_records;
-create policy "app access student book records" on student_book_records for all to anon using (true) with check (true);
+create policy "app access student book records" on student_book_records for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access loans" on loans;
-create policy "app access loans" on loans for all to anon using (true) with check (true);
+create policy "app access loans" on loans for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access cash" on cash_movements;
-create policy "app access cash" on cash_movements for all to anon using (true) with check (true);
+create policy "app access cash" on cash_movements for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access purchase orders" on purchase_orders;
-create policy "app access purchase orders" on purchase_orders for all to anon using (true) with check (true);
+create policy "app access purchase orders" on purchase_orders for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access accounts receivable" on accounts_receivable;
-create policy "app access accounts receivable" on accounts_receivable for all to anon using (true) with check (true);
+create policy "app access accounts receivable" on accounts_receivable for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access app settings" on app_settings;
-create policy "app access app settings" on app_settings for all to anon using (true) with check (true);
+create policy "app access app settings" on app_settings for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
 drop policy if exists "app access custom reminders" on custom_reminders;
-create policy "app access custom reminders" on custom_reminders for all to anon using (true) with check (true);
+create policy "app access custom reminders" on custom_reminders for all to authenticated using (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com') with check (lower(auth.jwt() ->> 'email') = 'rodrigoquisbert543@gmail.com');
+
+revoke all privileges on table
+  products, sales, materials, teachers, customers, students,
+  student_book_records, loans, cash_movements, purchase_orders,
+  accounts_receivable, app_settings, custom_reminders
+from anon;
+grant select, insert, update, delete on table
+  products, sales, materials, teachers, customers, students,
+  student_book_records, loans, cash_movements, purchase_orders,
+  accounts_receivable, app_settings, custom_reminders
+to authenticated;
+
+create or replace function public.get_daily_cash_report()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  report_date date := (now() at time zone 'America/La_Paz')::date;
+  start_at timestamptz;
+  end_at timestamptz;
+begin
+  if lower(coalesce(auth.jwt() ->> 'email', '')) not in (
+    'rodrigoquisbert543@gmail.com',
+    'rodrigoquisbert543+reportes@gmail.com'
+  ) then
+    raise exception 'No autorizado para consultar el informe diario.'
+      using errcode = '42501';
+  end if;
+
+  start_at := report_date::timestamp at time zone 'America/La_Paz';
+  end_at := (report_date + 1)::timestamp at time zone 'America/La_Paz';
+
+  return jsonb_build_object(
+    'sales',
+    coalesce(
+      (
+        select jsonb_agg(to_jsonb(report_sale))
+        from (
+          select id, customer, payer, items, total, cash_amount, qr_amount, status, sold_at
+          from public.sales
+          where sold_at >= start_at and sold_at < end_at
+        ) report_sale
+      ),
+      '[]'::jsonb
+    ),
+    'movements',
+    coalesce(
+      (
+        select jsonb_agg(to_jsonb(report_movement))
+        from (
+          select id, type, concept, reason, amount, cash_amount, qr_amount, status, moved_at
+          from public.cash_movements
+          where moved_at >= start_at and moved_at < end_at
+        ) report_movement
+      ),
+      '[]'::jsonb
+    )
+  );
+end;
+$$;
+
+revoke all privileges on function public.get_daily_cash_report() from public, anon, authenticated;
+grant execute on function public.get_daily_cash_report() to authenticated;

@@ -4,12 +4,14 @@ Sistema para ventas escolares en bolivianos, inventario, recibos, caja, QR y con
 
 ## Supabase
 
-1. Crea un proyecto gratuito en [Supabase](https://supabase.com/).
-2. Ejecuta [supabase-schema.sql](supabase-schema.sql) en el SQL Editor.
-3. Copia `.env.example` como `.env.local` y coloca la URL y la clave `anon` pública del proyecto.
-4. Reinicia `npm run dev`.
+1. Crea un proyecto en [Supabase](https://supabase.com/).
+2. En **Authentication > Users**, invita o crea `rodrigoquisbert543@gmail.com` y establece la contraseña directamente en Supabase. Desactiva los registros públicos.
+3. Para el informe de caja, invita también `rodrigoquisbert543+reportes@gmail.com`. Es una cuenta separada, destinada únicamente a consultar por RPC las ventas y movimientos del día actual. No puede usar la aplicación ni leer las tablas directamente.
+4. Ejecuta [supabase-schema.sql](supabase-schema.sql) en el SQL Editor. Las políticas permiten acceso de la app solo a la cuenta autorizada; `anon` no tiene permisos sobre las tablas.
+5. Copia `.env.example` como `.env.local` y coloca la URL y la clave `anon`/publishable pública del proyecto. Nunca coloques la clave `service_role` en la app ni en Apps Script.
+6. Reinicia `npm run dev` e inicia sesión en cada dispositivo con la cuenta autorizada.
 
-Sin variables de Supabase la aplicación continúa funcionando con almacenamiento local. Cuando están configuradas, sincroniza productos, ventas, materiales, préstamos, profesores, clientes, estudiantes, compras de libros registradas, pedidos, movimientos de caja, cuentas por cobrar, recordatorios personales y el saldo inicial de caja. La carga pagina los resultados completos; los guardados se envían en lotes pequeños, solo para registros que cambiaron, y nunca borran filas remotas. Los dispositivos vuelven a consultar Supabase cada 30 segundos y al recuperar el foco o la conexión para reflejar cambios hechos en otro dispositivo. **Configuración** muestra cuántos productos se confirmaron en Supabase, los errores y el estado del esquema; “Sincronizar ahora” fuerza una nueva revisión.
+Sin variables de Supabase la aplicación continúa funcionando con almacenamiento local. Cuando están configuradas, requiere iniciar sesión con la cuenta autorizada y sincroniza productos, ventas, materiales, préstamos, profesores, clientes, estudiantes, compras de libros registradas, pedidos, movimientos de caja, cuentas por cobrar, recordatorios personales y el saldo inicial de caja. La clave pública no concede acceso a las tablas sin una sesión autenticada. La carga pagina los resultados completos; los guardados se envían en lotes pequeños, solo para registros que cambiaron, y nunca borran filas remotas. Los dispositivos vuelven a consultar Supabase cada 30 segundos y al recuperar el foco o la conexión para reflejar cambios hechos en otro dispositivo. **Configuración** muestra cuántos productos se confirmaron en Supabase, los errores y el estado del esquema; “Sincronizar ahora” fuerza una nueva revisión.
 
 Si el proyecto Supabase ya existía, vuelve a ejecutar [supabase-schema.sql](supabase-schema.sql) para crear/actualizar las tablas y columnas que requiere esta versión, incluidas las de estudiantes y control de libros por curso.
 
@@ -30,7 +32,7 @@ Cada aplicación vendida debe usar su propio proyecto de Supabase y sus propias 
 
 El script [scripts/daily-caja.gs](scripts/daily-caja.gs) prepara el registro del día a las 21:00 de Bolivia desde el 12 de noviembre de 2026: suma el efectivo en una fila, registra cada cobro QR por separado y agrega los egresos de Caja. Usa las pestañas mensuales del libro y actualiza sus propias filas si se ejecuta de nuevo.
 
-Para activarlo, abre el libro de caja en Google Sheets, ve a **Extensiones > Apps Script**, copia el contenido de `scripts/daily-caja.gs` en `Code.gs` y guarda. En **Configuración del proyecto > Propiedades de secuencia de comandos**, agrega `SUPABASE_URL` y `SUPABASE_ANON_KEY` con los valores del mismo proyecto Supabase usado por la aplicación (nunca uses la clave `service_role`). Ejecuta `installDailyReportTrigger` una vez y autoriza el acceso solicitado por Google. La ejecución diaria de Apps Script puede ocurrir unos minutos alrededor de las 21:00; el script falla explícitamente si falta una pestaña o los encabezados no coinciden, sin alterar la hoja.
+Para activarlo, abre el libro de caja en Google Sheets, ve a **Extensiones > Apps Script**, copia el contenido de `scripts/daily-caja.gs` en `Code.gs` y guarda. En **Configuración del proyecto > Propiedades de secuencia de comandos**, configura `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_REPORT_EMAIL` (`rodrigoquisbert543+reportes@gmail.com`) y `SUPABASE_REPORT_PASSWORD` con la contraseña de esa cuenta. La contraseña debe guardarse solo como propiedad del proyecto Apps Script; nunca la compartas ni la incluyas en el repositorio o en la app. El script inicia sesión como la cuenta limitada y llama a una función que devuelve únicamente las ventas y movimientos del día actual. Ejecuta `installDailyReportTrigger` una vez y autoriza el acceso solicitado por Google. La ejecución diaria de Apps Script puede ocurrir unos minutos alrededor de las 21:00; el script falla explícitamente si falta una pestaña o los encabezados no coinciden, sin alterar la hoja.
 
 ### Actualización de la tabla `products`
 

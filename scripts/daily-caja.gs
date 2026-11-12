@@ -41,7 +41,7 @@ function installDailyReportTrigger() {
 
 function writeDailyReport() {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30_000)) throw new Error("Ya hay un informe diario en ejecucion.");
+  if (!lock.tryLock(30000)) throw new Error("Ya hay un informe diario en ejecucion.");
   try {
     writeDailyReportLocked();
   } finally {
@@ -66,18 +66,7 @@ function writeDailyReportLocked() {
   const end = new Date(
     new Date(`${date}T00:00:00-04:00`).getTime() + 24 * 60 * 60 * 1000,
   ).toISOString();
-  const sales = fetchRows(
-    config,
-    "sales",
-    "id,customer,payer,items,total,cash_amount,qr_amount,status,sold_at",
-    `sold_at=gte.${encodeURIComponent(start)}&sold_at=lt.${encodeURIComponent(end)}`,
-  );
-  const movements = fetchRows(
-    config,
-    "cash_movements",
-    "id,type,concept,reason,amount,cash_amount,qr_amount,status,moved_at",
-    `moved_at=gte.${encodeURIComponent(start)}&moved_at=lt.${encodeURIComponent(end)}`,
-  );
+  const { sales, movements } = fetchDailyData(config);
 
   const cashCategories = Array(8).fill(0);
   const reportRows = [];
@@ -146,26 +135,53 @@ function getConfig() {
   const properties = PropertiesService.getScriptProperties();
   const url = String(properties.getProperty("SUPABASE_URL") || "").replace(/\/+$/, "");
   const key = properties.getProperty("SUPABASE_ANON_KEY");
-  if (!url || !key)
-    throw new Error("Configura SUPABASE_URL y SUPABASE_ANON_KEY en las propiedades del script.");
-  return { url, key };
+  const email = properties.getProperty("SUPABASE_REPORT_EMAIL");
+  const password = properties.getProperty("SUPABASE_REPORT_PASSWORD");
+  if (!url || !key || !email || !password)
+    throw new Error("Configura SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_REPORT_EMAIL y SUPABASE_REPORT_PASSWORD en las propiedades del script.");
+  return { url, key, email, password };
 }
 
-function fetchRows(config, table, columns, filters) {
-  const response = UrlFetchApp.fetch(
-    `${config.url}/rest/v1/${table}?select=${columns}&${filters}`,
+function fetchDailyData(config) {
+  const authResponse = UrlFetchApp.fetch(
+    `${config.url}/auth/v1/token?grant_type=password`,
     {
+      method: "post",
+      contentType: "application/json",
+      headers: { apikey: config.key },
+      payload: JSON.stringify({
+        email: config.email,
+        password: config.password,
+      }),
+      muteHttpExceptions: true,
+    },
+  );
+  const authStatus = authResponse.getResponseCode();
+  if (authStatus < 200 || authStatus >= 300)
+    throw new Error(`No se pudo autenticar la cuenta del informe (${authStatus}).`);
+  const accessToken = JSON.parse(authResponse.getContentText()).access_token;
+  if (!accessToken) throw new Error("Supabase no devolvio una sesion para el informe diario.");
+
+  const response = UrlFetchApp.fetch(
+    `${config.url}/rest/v1/rpc/get_daily_cash_report`,
+    {
+      method: "post",
+      contentType: "application/json",
       headers: {
         apikey: config.key,
-        Authorization: `Bearer ${config.key}`,
+        Authorization: `Bearer ${accessToken}`,
       },
+      payload: JSON.stringify({}),
       muteHttpExceptions: true,
     },
   );
   const status = response.getResponseCode();
   if (status < 200 || status >= 300)
-    throw new Error(`No se pudo consultar ${table} en Supabase (${status}).`);
-  return JSON.parse(response.getContentText());
+    throw new Error(`No se pudo consultar el informe diario en Supabase (${status}).`);
+  const data = JSON.parse(response.getContentText());
+  if (!Array.isArray(data.sales) || !Array.isArray(data.movements))
+    throw new Error("Supabase devolvio un formato invalido para el informe diario.");
+  return data;
 }
 
 function validateHeaders(sheet) {
