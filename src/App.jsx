@@ -89,6 +89,11 @@ function nextPurchaseOrderId(list) {
   }
   return id;
 }
+function nextSaleId() {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `V-${timestamp}-${random}`;
+}
 const orderTypes = {
   original: { label: "Libro original", categories: ["Libros y útiles"] },
   fotocopia: { label: "Libro fotocopia", categories: ["Fotocopias"] },
@@ -590,13 +595,14 @@ function printInventoryReport(reportData, totals, range) {
 
 function parseCsv(text) {
   const rows = text
+    .replace(/^\uFEFF/, "")
     .trim()
     .split(/\r?\n/)
     .filter(Boolean)
     .map((row) =>
       row
         .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
-        .map((cell) => cell.trim().replace(/^"|"$/g, "")),
+        .map((cell) => cell.trim().replace(/^"|"$/g, "").replace(/""/g, '"')),
     )
     .filter(Boolean);
   if (!rows.length) return [];
@@ -612,6 +618,22 @@ function parseCsv(text) {
       headers.map((header, index) => [header, row[index] || ""]),
     ),
   );
+}
+function parseCsvAmount(value) {
+  const text = String(value || "").replace(/[^\d,.-]/g, "");
+  const normalized = /,\d{1,2}$/.test(text)
+    ? text.replace(/\./g, "").replace(",", ".")
+    : text.replace(/,/g, "");
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : NaN;
+}
+function stableImportHash(value) {
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 function csvCell(value) {
   const text = String(value ?? "");
@@ -839,7 +861,11 @@ function App() {
           setSyncStatus("local");
           return;
         }
-        cloudSkipTablesRef.current = cloud.missingTables || [];
+        const missingTables = cloud.missingTables || [];
+        const newlyMissingTables = missingTables.filter(
+          (table) => !cloudSkipTablesRef.current.includes(table),
+        );
+        cloudSkipTablesRef.current = missingTables;
         cloudBaselineRef.current = cloud;
         setSchemaWarnings(cloudSkipTablesRef.current);
         setSyncedRecordCounts(
@@ -849,7 +875,7 @@ function App() {
               .map(([table, rows]) => [table, rows.length]),
           ),
         );
-        if (cloudSkipTablesRef.current.length)
+        if (newlyMissingTables.length)
           showToast("Supabase conectado. Ejecuta supabase-schema.sql para habilitar las tablas nuevas.");
         const mergedProducts = cloud.products?.length
           ? mergeRecords(productsRef.current, cloud.products).map((product) => ({
@@ -957,6 +983,8 @@ function App() {
               quantity: Number(movement.quantity ?? 0),
               cashAmount: Number(movement.cash_amount ?? movement.cashAmount ?? 0),
               qrAmount: Number(movement.qr_amount ?? movement.qrAmount ?? 0),
+              status: movement.status || "Vigente",
+              voidedAt: movement.voided_at || movement.voidedAt || "",
               date: movement.moved_at || movement.date,
             })),
           }));
@@ -975,7 +1003,21 @@ function App() {
               contract: record.contract || "",
               commitment: record.commitment || "",
               infocredStatus: record.infocred_status || record.infocredStatus || "Pendiente",
+              whatsappPhone: record.whatsapp_phone || record.whatsappPhone || "",
+              nextFollowUpDate: record.next_follow_up_date || record.nextFollowUpDate || "",
+              followUpNotes: record.follow_up_notes || record.followUpNotes || "",
+              followUpHistory: record.follow_up_history || record.followUpHistory || [],
+              whatsappMessage: record.whatsapp_message || record.whatsappMessage || "",
               createdAt: record.created_at || record.createdAt || "",
+            })),
+          );
+        if (cloud.custom_reminders?.length)
+          setCustomReminders((current) =>
+            mergeRecords(current, cloud.custom_reminders).map((reminder) => ({
+              ...reminder,
+              date: reminder.due_date || reminder.date || "",
+              createdAt: reminder.created_at || reminder.createdAt || "",
+              deleted: Boolean(reminder.deleted),
             })),
           );
         const cashSettings = cloud.app_settings?.find((setting) => setting.id === "cash");
@@ -984,8 +1026,14 @@ function App() {
             ...current,
             opening: Number(cashSettings.value.opening ?? current.opening ?? 0),
           }));
+        const completedReminders = cloud.app_settings?.find(
+          (setting) => setting.id === "reminders-completed",
+        );
+        if (completedReminders?.value)
+          setRemindersCompleted(completedReminders.value);
         cloudReadyRef.current = true;
         setSyncStatus(cloudSkipTablesRef.current.length ? "schema" : "synced");
+        setSyncVersion((current) => current + 1);
       })
       .catch((error) => {
         cloudReadyRef.current = false;
@@ -993,6 +1041,19 @@ function App() {
         showToast(error.message || "No se pudo cargar la información de Supabase");
       });
   }, [cloudRetry, showToast]);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return undefined;
+    const refreshCloudState = () => {
+      if (document.visibilityState === "visible")
+        setCloudRetry((current) => current + 1);
+    };
+    const timer = window.setInterval(refreshCloudState, 30_000);
+    window.addEventListener("focus", refreshCloudState);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshCloudState);
+    };
+  }, []);
   useEffect(() => {
     if (!isSupabaseConfigured || !cloudReadyRef.current) return undefined;
     const attempt = ++syncAttemptRef.current;
@@ -1008,6 +1069,8 @@ function App() {
       receivables,
       students,
       studentBookRecords,
+      customReminders,
+      remindersCompleted,
       skipTables: cloudSkipTablesRef.current,
       omittedColumns: cloudOmittedColumnsRef.current,
       baseline: cloudBaselineRef.current,
@@ -1051,9 +1114,9 @@ function App() {
         });
     }, 250);
     return () => window.clearTimeout(syncTimerRef.current);
-  }, [products, sales, materials, loans, teachers, customers, cash, purchaseOrders, receivables, students, studentBookRecords, syncVersion, showToast]);
+  }, [products, sales, materials, loans, teachers, customers, cash, purchaseOrders, receivables, students, studentBookRecords, customReminders, remindersCompleted, syncVersion, showToast]);
   useEffect(() => {
-    const retryOnline = () => setSyncVersion((value) => value + 1);
+    const retryOnline = () => setCloudRetry((value) => value + 1);
     window.addEventListener("online", retryOnline);
     return () => window.removeEventListener("online", retryOnline);
   }, []);
@@ -1267,7 +1330,7 @@ function App() {
       (item) => item.id === customer || item.name === customer,
     );
     const sale = {
-      id: `V-${String(sales.length + 1).padStart(5, "0")}`,
+      id: nextSaleId(),
       date: new Date().toISOString(),
       status: "Vigente",
       customer: customerRecord?.name || customer,
@@ -1504,6 +1567,34 @@ function App() {
         : `${quantity} unidades agregadas al stock`,
     );
   };
+  const updateReceivableFollowUp = (receivableId, data) => {
+    const note = String(data.followUpNotes || "").trim();
+    setReceivables((current) =>
+      current.map((record) =>
+        record.id === receivableId
+          ? {
+              ...record,
+              gestion: String(data.gestion || "").trim(),
+              whatsappPhone: String(data.whatsappPhone || "").trim(),
+              nextFollowUpDate: String(data.nextFollowUpDate || ""),
+              followUpNotes: note,
+              whatsappMessage: String(data.whatsappMessage || "").trim(),
+              followUpHistory: note && note !== record.followUpNotes
+                ? [
+                    {
+                      id: `SEG-${Date.now()}`,
+                      date: localDateString(),
+                      note,
+                    },
+                    ...(record.followUpHistory || []),
+                  ]
+                : record.followUpHistory || [],
+            }
+          : record,
+      ),
+    );
+    showToast("Seguimiento de la cuenta actualizado");
+  };
   const createPurchaseOrder = (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -1730,6 +1821,64 @@ function App() {
     reader.readAsText(file, "UTF-8");
     event.target.value = "";
   };
+  const importReceivablesCsv = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rows = parseCsv(String(reader.result));
+        const candidates = rows
+          .map((row, index) => {
+            const guardianName = String(row.nombre_completo || "").trim();
+            const total = parseCsvAmount(row.monto_deuda);
+            if (!guardianName || !Number.isFinite(total) || total <= 0)
+              return null;
+            return {
+              id: `CXC-CSV-${stableImportHash(`${index}|${guardianName}|${total}`)}`,
+              guardianName,
+              studentName: "",
+              grade: "",
+              carnet: "",
+              family: "",
+              gestion: "",
+              total,
+              paid: 0,
+              paymentHistory: [],
+              contract: "",
+              commitment: "",
+              infocredStatus: "Pendiente",
+              whatsappPhone: "",
+              nextFollowUpDate: "",
+              followUpNotes: "",
+              followUpHistory: [],
+              whatsappMessage: "",
+              createdAt: new Date().toISOString(),
+            };
+          })
+          .filter(Boolean);
+        const existingIds = new Set(receivables.map((item) => item.id));
+        const imported = candidates.filter(
+          (item) => !existingIds.has(item.id),
+        );
+        setReceivables((current) => {
+          const currentIds = new Set(current.map((item) => item.id));
+          return [
+            ...imported.filter((item) => !currentIds.has(item.id)),
+            ...current,
+          ];
+        });
+        showToast(
+          `${imported.length} cuentas importadas; ${candidates.length - imported.length} duplicadas omitidas`,
+        );
+      } catch (error) {
+        showToast(`No se pudo leer el CSV: ${error.message}`);
+      }
+    };
+    reader.onerror = () => showToast("No se pudo leer el archivo CSV");
+    reader.readAsText(file, "UTF-8");
+    event.target.value = "";
+  };
   const addStudent = (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -1937,6 +2086,11 @@ function App() {
       contract: String(data.get("contract") || "").trim(),
       commitment: String(data.get("commitment") || "").trim(),
       infocredStatus: "Pendiente",
+      whatsappPhone: "",
+      nextFollowUpDate: "",
+      followUpNotes: "",
+      followUpHistory: [],
+      whatsappMessage: "",
       createdAt: new Date().toISOString(),
     };
     setReceivables((current) => [receivable, ...current]);
@@ -1988,13 +2142,17 @@ function App() {
   };
   const addCustomReminder = ({ title, date }) =>
     setCustomReminders((current) => [
-      { id: `REC-${Date.now()}`, title, date, done: false, createdAt: new Date().toISOString() },
+      { id: `REC-${Date.now()}`, title, date, done: false, deleted: false, createdAt: new Date().toISOString() },
       ...current,
     ]);
   const toggleCustomReminder = (id) =>
     setCustomReminders((current) => current.map((item) => item.id === id ? { ...item, done: !item.done } : item));
   const deleteCustomReminder = (id) =>
-    setCustomReminders((current) => current.filter((item) => item.id !== id));
+    setCustomReminders((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, deleted: true } : item,
+      ),
+    );
   const toggleReminderCompleted = (task) => {
     const key = `${task.period}:${task.id}`;
     setRemindersCompleted((current) => ({
@@ -2076,6 +2234,13 @@ function App() {
     },
   ];
   const activeReminders = currentMonthlyReminders(new Date(), remindersCompleted);
+  const today = localDateString();
+  const dueReceivableFollowUps = receivables.filter(
+    (record) =>
+      Number(record.total) - Number(record.paid) > 0.001 &&
+      record.nextFollowUpDate &&
+      record.nextFollowUpDate <= today,
+  ).length;
   const nav = (name) => {
     const Icon = navItems.find(([label]) => label === name)[1];
     return (
@@ -2092,8 +2257,11 @@ function App() {
         {name === "Historial" && sales.length > 0 && (
           <span className="nav-count">{sales.length}</span>
         )}
-        {name === "Recordatorios" && activeReminders.length + customReminders.filter((item) => !item.done).length > 0 && (
-          <span className="nav-count">{activeReminders.length + customReminders.filter((item) => !item.done).length}</span>
+        {name === "Recordatorios" && activeReminders.length + customReminders.filter((item) => !item.done && !item.deleted).length > 0 && (
+          <span className="nav-count">{activeReminders.length + customReminders.filter((item) => !item.done && !item.deleted).length}</span>
+        )}
+        {name === "Cuentas por cobrar" && dueReceivableFollowUps > 0 && (
+          <span className="nav-count">{dueReceivableFollowUps}</span>
         )}
       </button>
     );
@@ -2474,6 +2642,9 @@ function App() {
               onAdd={addReceivable}
               onPayment={registerReceivablePayment}
               onInfocredStatus={updateInfocredStatus}
+              onImport={importReceivablesCsv}
+              onUpdateFollowUp={updateReceivableFollowUp}
+              dueFollowUps={dueReceivableFollowUps}
             />
           )}
           {activeNav === "Recordatorios" && (
@@ -4834,6 +5005,9 @@ function AccountsReceivableView({
   onAdd,
   onPayment,
   onInfocredStatus,
+  onImport,
+  onUpdateFollowUp,
+  dueFollowUps,
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todas");
@@ -4872,6 +5046,21 @@ function AccountsReceivableView({
       {schemaWarnings.includes("accounts_receivable") && (
         <p className="schema-warning-banner">La conexión con Supabase está activa, pero las cuentas por cobrar aún no se sincronizan en la nube. Ejecuta <code>supabase-schema.sql</code> desde SQL Editor y luego pulsa “Revisar conexión / esquema” en Configuración.</p>
       )}
+      {dueFollowUps > 0 && (
+        <p className="schema-warning-banner">
+          Hay {dueFollowUps} seguimiento(s) de cuentas por cobrar vencido(s) o para hoy.
+        </p>
+      )}
+      <section className="panel receivable-import">
+        <strong>Importar deudores desde CSV</strong>
+        <p className="form-note">
+          Se importan únicamente NOMBRE COMPLETO y MONTO DEUDA. La gestión y los datos de seguimiento quedan vacíos para completar después.
+        </p>
+        <label className="primary-button small file-button">
+          <Upload size={15} />Importar cuentas por cobrar
+          <input type="file" accept=".csv,text/csv" onChange={onImport} />
+        </label>
+      </section>
       <details className="panel receivable-create" open={receivables.length === 0}>
         <summary>Registrar una cuenta por cobrar</summary>
         <p className="form-note">Incluye deudas de la gestión actual o anteriores. Los abonos se registran aquí y nunca ingresan a Caja.</p>
@@ -4881,7 +5070,7 @@ function AccountsReceivableView({
           <label>Curso / nivel<input name="grade" placeholder="Ej. 5to de primaria" /></label>
           <label>Carnet de identidad<input name="carnet" /></label>
           <label>Familia<input name="family" placeholder="Ej. Familia Pérez" /></label>
-          <label>Gestión de la deuda<input name="gestion" type="number" min="1900" max="2100" defaultValue={new Date().getFullYear()} required /></label>
+          <label>Gestión de la deuda<input name="gestion" type="number" min="1900" max="2100" /></label>
           <label>Importe total adeudado (Bs.)<input name="total" type="number" step="0.01" min="0.01" required /></label>
           <label>Contrato<input name="contract" placeholder="Nro. / detalle / Sin contrato" /></label>
           <label className="receivable-wide">Compromisos de pago<input name="commitment" placeholder="Fecha acordada, cuotas u otro compromiso" /></label>
@@ -4903,15 +5092,20 @@ function AccountsReceivableView({
               return (
                 <article className="receivable-record" key={record.id}>
                   <div className="receivable-record-head">
-                    <div><strong>{record.guardianName}</strong><small>{record.studentName || "Estudiante no indicado"}{record.grade ? ` · ${record.grade}` : ""}</small></div>
+                    <div><strong>{record.guardianName}</strong>{(record.studentName || record.grade) && <small>{[record.studentName, record.grade].filter(Boolean).join(" · ")}</small>}</div>
                     <span className={`receivable-badge ${balance <= 0.001 ? "paid" : "owing"}`}>{balance <= 0.001 ? "Cancelada" : "Con deuda"}</span>
                   </div>
                   <div className="receivable-facts">
-                    <span>Gestión <b>{record.gestion}</b></span>
-                    <span>Familia <b>{record.family || "—"}</b></span>
-                    <span>Carnet <b>{record.carnet || "—"}</b></span>
-                    <span>Contrato <b>{record.contract || "No indicado"}</b></span>
-                    <span>Compromiso <b>{record.commitment || "No indicado"}</b></span>
+                    {record.gestion && <span>Gestión <b>{record.gestion}</b></span>}
+                    {record.family && <span>Familia <b>{record.family}</b></span>}
+                    {record.carnet && <span>Carnet <b>{record.carnet}</b></span>}
+                    {record.contract && <span>Contrato <b>{record.contract}</b></span>}
+                    {record.commitment && <span>Compromiso <b>{record.commitment}</b></span>}
+                    {record.nextFollowUpDate && (
+                      <span>
+                        Próximo contacto <b>{record.nextFollowUpDate}</b>
+                      </span>
+                    )}
                   </div>
                   <div className="receivable-balance">
                     <span>Total {money(record.total)}</span><span>Pagado {money(record.paid)}</span><strong>Saldo {money(balance)}</strong>
@@ -4924,6 +5118,56 @@ function AccountsReceivableView({
                     </label>
                     {balance > 0.001 && <button type="button" className="secondary-button small" onClick={() => { setPaymentFor(paymentFor === record.id ? "" : record.id); setPaymentMode("total"); }}><Banknote size={15} />Registrar pago</button>}
                   </div>
+                  {(() => {
+                    const phone = String(record.whatsappPhone || "").replace(/\D/g, "");
+                    const message = record.whatsappMessage || `Hola ${record.guardianName}, te contactamos de Vida y Verdad Caranavi. El saldo pendiente de tu cuenta es ${money(balance)}.`;
+                    const whatsappUrl = phone
+                      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+                      : "";
+                    return (
+                      <details className="receivable-follow-up">
+                        <summary>Seguimiento y contacto</summary>
+                        <form
+                          className="receivable-form"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            const data = new FormData(event.currentTarget);
+                            onUpdateFollowUp(record.id, {
+                              gestion: String(data.get("gestion") || ""),
+                              whatsappPhone: String(data.get("whatsappPhone") || ""),
+                              nextFollowUpDate: String(data.get("nextFollowUpDate") || ""),
+                              followUpNotes: String(data.get("followUpNotes") || ""),
+                              whatsappMessage: String(data.get("whatsappMessage") || ""),
+                            });
+                          }}
+                        >
+                          <label>Gestión<input name="gestion" type="number" min="1900" max="2100" defaultValue={record.gestion || ""} /></label>
+                          <label>Teléfono WhatsApp<input name="whatsappPhone" type="tel" placeholder="591..." defaultValue={record.whatsappPhone || ""} /></label>
+                          <label>Próximo contacto<input name="nextFollowUpDate" type="date" defaultValue={record.nextFollowUpDate || ""} /></label>
+                          <label className="receivable-wide">Notas de seguimiento<textarea name="followUpNotes" rows="2" defaultValue={record.followUpNotes || ""} placeholder="Anota el contacto, respuesta o compromiso" /></label>
+                          <label className="receivable-wide">Mensaje personalizado<textarea name="whatsappMessage" rows="3" defaultValue={message} /></label>
+                          <button className="primary-button small" type="submit"><Check size={15} />Guardar seguimiento</button>
+                        </form>
+                        {whatsappUrl ? (
+                          <a className="secondary-button small" href={whatsappUrl} target="_blank" rel="noreferrer">
+                            Abrir WhatsApp para revisar y enviar
+                          </a>
+                        ) : (
+                          <p className="form-note">Añade un teléfono con código de país para preparar el mensaje en WhatsApp.</p>
+                        )}
+                        {(record.followUpHistory || []).length > 0 && (
+                          <details className="payment-history">
+                            <summary>Historial de seguimiento ({record.followUpHistory.length})</summary>
+                            {record.followUpHistory.map((entry) => (
+                              <div key={entry.id}>
+                                <span>{entry.date} · {entry.note}</span>
+                              </div>
+                            ))}
+                          </details>
+                        )}
+                      </details>
+                    );
+                  })()}
                   {paymentFor === record.id && balance > 0.001 && (
                     <form className="receivable-payment-form" onSubmit={(event) => {
                       event.preventDefault();
@@ -4969,7 +5213,7 @@ function CustomReminders({ items, onAdd, onToggle, onDelete, compact = false }) 
     setTitle("");
     setDate("");
   };
-  const sorted = [...items].sort((a, b) => Number(a.done) - Number(b.done) || (a.date || "9999").localeCompare(b.date || "9999"));
+  const sorted = items.filter((item) => !item.deleted).sort((a, b) => Number(a.done) - Number(b.done) || (a.date || "9999").localeCompare(b.date || "9999"));
   const visible = compact ? sorted.filter((item) => !item.done).slice(0, 6) : sorted;
   return (
     <div className="custom-reminders">

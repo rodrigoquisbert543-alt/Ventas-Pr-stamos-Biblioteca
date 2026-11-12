@@ -9,7 +9,7 @@ Sistema para ventas escolares en bolivianos, inventario, recibos, caja, QR y con
 3. Copia `.env.example` como `.env.local` y coloca la URL y la clave `anon` pública del proyecto.
 4. Reinicia `npm run dev`.
 
-Sin variables de Supabase la aplicación continúa funcionando con almacenamiento local. Cuando están configuradas, sincroniza productos, ventas, materiales, préstamos, profesores, clientes, estudiantes, compras de libros registradas, pedidos, movimientos de caja, cuentas por cobrar y el saldo inicial de caja. La carga pagina los resultados completos; los guardados se envían en lotes pequeños, solo para registros que cambiaron, y nunca borran filas remotas. **Configuración** muestra cuántos productos se confirmaron en Supabase, los errores y el estado del esquema; “Sincronizar ahora” fuerza una nueva revisión.
+Sin variables de Supabase la aplicación continúa funcionando con almacenamiento local. Cuando están configuradas, sincroniza productos, ventas, materiales, préstamos, profesores, clientes, estudiantes, compras de libros registradas, pedidos, movimientos de caja, cuentas por cobrar, recordatorios personales y el saldo inicial de caja. La carga pagina los resultados completos; los guardados se envían en lotes pequeños, solo para registros que cambiaron, y nunca borran filas remotas. Los dispositivos vuelven a consultar Supabase cada 30 segundos y al recuperar el foco o la conexión para reflejar cambios hechos en otro dispositivo. **Configuración** muestra cuántos productos se confirmaron en Supabase, los errores y el estado del esquema; “Sincronizar ahora” fuerza una nueva revisión.
 
 Si el proyecto Supabase ya existía, vuelve a ejecutar [supabase-schema.sql](supabase-schema.sql) para crear/actualizar las tablas y columnas que requiere esta versión, incluidas las de estudiantes y control de libros por curso.
 
@@ -20,10 +20,17 @@ Cada aplicación vendida debe usar su propio proyecto de Supabase y sus propias 
 ## Administración
 
 - **Cuentas por cobrar** registra deudas de cualquier gestión, los datos de padres/tutores y estudiantes, contratos, compromisos, situación INFOCRED y pagos parciales o totales con su historial. Estos pagos se guardan únicamente como abonos de la deuda y **no crean ingresos ni movimientos de caja**.
-- **Recordatorios** avisa desde tres días antes y hasta marcar como realizado: descuentos del personal (día 1), INFOCRED y SEDEM (día 10), Ministerio de Trabajo (día 11) y Gestora (día 21). La confirmación mensual se guarda en el dispositivo.
+- La importación CSV de **Cuentas por cobrar** toma solo `NOMBRE COMPLETO` y `MONTO DEUDA`; deja gestión y seguimiento vacíos. Cada cuenta permite guardar teléfono WhatsApp, notas, próxima fecha de contacto y un mensaje personalizable que se abre en WhatsApp para revisar y enviar manualmente. La app muestra avisos de seguimientos vencidos o para hoy.
+- **Recordatorios** avisa desde tres días antes y hasta marcar como realizado: descuentos del personal (día 1), INFOCRED y SEDEM (día 10), Ministerio de Trabajo (día 11) y Gestora (día 21). La confirmación mensual y los recordatorios personales se sincronizan entre dispositivos con Supabase.
 - En **Configuración** se puede activar el tema oscuro; la preferencia se guarda en el dispositivo.
 - En **Inventario**, “Imprimir todos los QRs” prepara etiquetas pequeñas de todos los productos en hoja A4.
 - En **Libros por curso**, vincula cada estudiante con su familia, asigna libros existentes del inventario a uno o más cursos e imprime la lista para las familias o el control de compras. En una venta de esos libros se debe seleccionar al estudiante; el sistema impide vender un libro de otro curso o repetir uno ya registrado. Las compras realizadas fuera del sistema se pueden marcar manualmente. Las ventas antiguas sin estudiante no se asignan automáticamente: deben registrarse manualmente para el alumno correcto. Los libros pendientes son informativos y no obligan a comprarlos.
+
+### Informe diario en Google Sheets
+
+El script [scripts/daily-caja.gs](scripts/daily-caja.gs) prepara el registro del día a las 21:00 de Bolivia desde el 12 de noviembre de 2026: suma el efectivo en una fila, registra cada cobro QR por separado y agrega los egresos de Caja. Usa las pestañas mensuales del libro y actualiza sus propias filas si se ejecuta de nuevo.
+
+Para activarlo, abre el libro de caja en Google Sheets, ve a **Extensiones > Apps Script**, copia el contenido de `scripts/daily-caja.gs` en `Code.gs` y guarda. En **Configuración del proyecto > Propiedades de secuencia de comandos**, agrega `SUPABASE_URL` y `SUPABASE_ANON_KEY` con los valores del mismo proyecto Supabase usado por la aplicación (nunca uses la clave `service_role`). Ejecuta `installDailyReportTrigger` una vez y autoriza el acceso solicitado por Google. La ejecución diaria de Apps Script puede ocurrir unos minutos alrededor de las 21:00; el script falla explícitamente si falta una pestaña o los encabezados no coinciden, sin alterar la hoja.
 
 ### Actualización de la tabla `products`
 

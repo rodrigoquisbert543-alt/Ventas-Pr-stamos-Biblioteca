@@ -129,9 +129,14 @@ create table if not exists cash_movements (
   operation text not null default '',
   product_id text,
   quantity numeric(12,2) not null default 0,
+  status text not null default 'Vigente',
+  voided_at timestamptz,
   moved_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+alter table cash_movements add column if not exists status text not null default 'Vigente';
+alter table cash_movements add column if not exists voided_at timestamptz;
 
 create table if not exists purchase_orders (
   id text primary key,
@@ -163,13 +168,33 @@ create table if not exists accounts_receivable (
   contract text not null default '',
   commitment text not null default '',
   infocred_status text not null default 'Pendiente',
+  whatsapp_phone text not null default '',
+  next_follow_up_date text not null default '',
+  follow_up_notes text not null default '',
+  follow_up_history jsonb not null default '[]'::jsonb,
+  whatsapp_message text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table accounts_receivable add column if not exists whatsapp_phone text not null default '';
+alter table accounts_receivable add column if not exists next_follow_up_date text not null default '';
+alter table accounts_receivable add column if not exists follow_up_notes text not null default '';
+alter table accounts_receivable add column if not exists follow_up_history jsonb not null default '[]'::jsonb;
+alter table accounts_receivable add column if not exists whatsapp_message text not null default '';
 
 create table if not exists app_settings (
   id text primary key,
   value jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
+);
+
+create table if not exists custom_reminders (
+  id text primary key,
+  title text not null,
+  due_date text not null default '',
+  done boolean not null default false,
+  deleted boolean not null default false,
+  created_at timestamptz not null default now()
 );
 
 alter table products enable row level security;
@@ -184,6 +209,7 @@ alter table cash_movements enable row level security;
 alter table purchase_orders enable row level security;
 alter table accounts_receivable enable row level security;
 alter table app_settings enable row level security;
+alter table custom_reminders enable row level security;
 alter table cash_movements add column if not exists reason text not null default '';
 alter table cash_movements add column if not exists operation text not null default '';
 alter table cash_movements add column if not exists product_id text;
@@ -217,3 +243,5 @@ drop policy if exists "app access accounts receivable" on accounts_receivable;
 create policy "app access accounts receivable" on accounts_receivable for all to anon using (true) with check (true);
 drop policy if exists "app access app settings" on app_settings;
 create policy "app access app settings" on app_settings for all to anon using (true) with check (true);
+drop policy if exists "app access custom reminders" on custom_reminders;
+create policy "app access custom reminders" on custom_reminders for all to anon using (true) with check (true);

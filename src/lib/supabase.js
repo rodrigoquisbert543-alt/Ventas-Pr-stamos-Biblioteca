@@ -27,8 +27,8 @@ async function loadTable(table) {
 
 export async function loadCloudState() {
   if (!supabase) return null
-  const tables = ['products', 'sales', 'materials', 'loans', 'teachers', 'customers', 'cash_movements', 'purchase_orders', 'accounts_receivable', 'app_settings', 'students', 'student_book_records']
-  const optionalTables = new Set(['accounts_receivable', 'app_settings', 'students', 'student_book_records'])
+  const tables = ['products', 'sales', 'materials', 'loans', 'teachers', 'customers', 'cash_movements', 'purchase_orders', 'accounts_receivable', 'app_settings', 'students', 'student_book_records', 'custom_reminders']
+  const optionalTables = new Set(['accounts_receivable', 'app_settings', 'students', 'student_book_records', 'custom_reminders'])
   const result = await Promise.all(tables.map(async (table) => {
     try {
       return [table, await loadTable(table), null]
@@ -49,7 +49,7 @@ export async function loadCloudState() {
   }
 }
 
-function createCloudPayload({ products, sales, materials, loans, teachers, customers, purchaseOrders, cash, receivables, students, studentBookRecords }) {
+function createCloudPayload({ products, sales, materials, loans, teachers, customers, purchaseOrders, cash, receivables, students, studentBookRecords, customReminders, remindersCompleted }) {
   return {
     products: products.map(({ id, minStock, purchaseCost, bookCourses, ...item }) => ({ id, ...item, min_stock: Number(minStock ?? 5), purchase_cost: Number(purchaseCost || 0), book_courses: bookCourses || [] })),
     sales: sales.map(({ id, ...item }) => ({
@@ -77,7 +77,7 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
     teachers: teachers.map(({ id, ...item }) => ({ id, ...item })),
     customers: (customers || []).map(({ id, ...item }) => ({ id, ...item })),
     purchase_orders: (purchaseOrders || []).map(({ id, ...item }) => ({ id, supplier: item.supplier, notes: item.notes || '', items: item.items || [], receipts: item.receipts || [], total: item.total || 0, paid: item.paid || 0, balance: item.balance || 0, status: item.status || 'Pendiente', ordered_at: item.date, received_at: item.receivedAt || null })),
-    cash_movements: (cash.movements || []).map(({ id, ...item }) => ({ id, type: item.type, concept: item.concept, reason: item.reason || '', operation: item.operation || '', product_id: item.productId || null, quantity: Number(item.quantity || 0), amount: Number(item.amount || 0), payment: item.payment || null, cash_amount: Number(item.cashAmount || 0), qr_amount: Number(item.qrAmount || 0), moved_at: item.date || new Date().toISOString() })),
+    cash_movements: (cash.movements || []).map(({ id, ...item }) => ({ id, type: item.type, concept: item.concept, reason: item.reason || '', operation: item.operation || '', product_id: item.productId || null, quantity: Number(item.quantity || 0), amount: Number(item.amount || 0), payment: item.payment || null, cash_amount: Number(item.cashAmount || 0), qr_amount: Number(item.qrAmount || 0), status: item.status || 'Vigente', voided_at: item.voidedAt || null, moved_at: item.date || new Date().toISOString() })),
     accounts_receivable: (receivables || []).map(({ id, ...item }) => ({
       id,
       guardian_name: item.guardianName || '',
@@ -92,9 +92,17 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       contract: item.contract || '',
       commitment: item.commitment || '',
       infocred_status: item.infocredStatus || 'Pendiente',
+      whatsapp_phone: item.whatsappPhone || '',
+      next_follow_up_date: item.nextFollowUpDate || '',
+      follow_up_notes: item.followUpNotes || '',
+      follow_up_history: item.followUpHistory || [],
+      whatsapp_message: item.whatsappMessage || '',
       created_at: item.createdAt || new Date().toISOString(),
     })),
-    app_settings: [{ id: 'cash', value: { opening: Number(cash.opening || 0) } }],
+    app_settings: [
+      { id: 'cash', value: { opening: Number(cash.opening || 0) } },
+      { id: 'reminders-completed', value: remindersCompleted || {} },
+    ],
     students: (students || []).map((student) => ({
       id: student.id,
       name: student.name,
@@ -112,6 +120,14 @@ function createCloudPayload({ products, sales, materials, loans, teachers, custo
       status: record.status || 'Comprado',
       source: record.source || 'Anterior al sistema',
       purchased_at: record.purchasedAt || new Date().toISOString(),
+    })),
+    custom_reminders: (customReminders || []).map((reminder) => ({
+      id: reminder.id,
+      title: reminder.title,
+      due_date: reminder.date || '',
+      done: Boolean(reminder.done),
+      deleted: Boolean(reminder.deleted),
+      created_at: reminder.createdAt || new Date().toISOString(),
     })),
   }
 }
