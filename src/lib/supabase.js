@@ -51,7 +51,14 @@ export async function loadCloudState() {
 
 function createCloudPayload({ products, sales, materials, loans, teachers, customers, purchaseOrders, cash, receivables, students, studentBookRecords, customReminders, remindersCompleted }) {
   return {
-    products: products.map(({ id, minStock, purchaseCost, bookCourses, ...item }) => ({ id, ...item, min_stock: Number(minStock ?? 5), purchase_cost: Number(purchaseCost || 0), book_courses: bookCourses || [] })),
+    products: products.map(({ id, minStock, purchaseCost, bookCourses, createdAt, created_at, ...item }) => ({
+      id,
+      ...item,
+      min_stock: Number(minStock ?? 5),
+      purchase_cost: Number(purchaseCost || 0),
+      book_courses: bookCourses || [],
+      created_at: created_at || createdAt || new Date().toISOString(),
+    })),
     sales: sales.map(({ id, ...item }) => ({
       id,
       customer: item.customer || 'Familia del colegio',

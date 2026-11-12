@@ -305,6 +305,7 @@ function productsFromSalesHistory(sales) {
         stock: 0,
         minStock: 5,
         unit: line.unit || "und.",
+        createdAt: sale.date || sale.sold_at || new Date().toISOString(),
         saleTime,
       });
     }
@@ -677,7 +678,11 @@ function App() {
       const recovered = productsFromSalesHistory(
         readStorage("vida-verdad-sales", []),
       ).filter((product) => !knownIds.has(product.id));
-      return [...stored, ...recovered];
+      return [...stored, ...recovered].map((product) => ({
+        ...product,
+        createdAt:
+          product.created_at || product.createdAt || new Date().toISOString(),
+      }));
     })(),
   );
   const [sales, setSales] = useState(() => readStorage("vida-verdad-sales", []));
@@ -880,6 +885,10 @@ function App() {
         const mergedProducts = cloud.products?.length
           ? mergeRecords(productsRef.current, cloud.products).map((product) => ({
               ...product,
+              createdAt:
+                product.created_at ||
+                product.createdAt ||
+                new Date().toISOString(),
               price: Number(product.price || 0),
               stock: Number(product.stock || 0),
               purchaseCost:
@@ -1475,6 +1484,7 @@ function App() {
       stock: Number(data.get("stock")),
       minStock: 5,
       unit: data.get("unit") || "und.",
+      createdAt: new Date().toISOString(),
     };
     if (products.some((item) => sameProduct(item, product))) {
       showToast("Ese producto ya está registrado");
@@ -1793,6 +1803,7 @@ function App() {
             stock: Number(row.stock || row.existencias || 0),
             minStock: Number(row.stock_minimo || row.min_stock || 5),
             unit: row.unidad || row.unit || "und.",
+            createdAt: new Date().toISOString(),
             bookCourses: String(row.cursos || row.book_courses || "")
               .split("|")
               .map((course) => course.trim())
