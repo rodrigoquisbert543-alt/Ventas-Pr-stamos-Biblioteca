@@ -102,6 +102,7 @@ const orderTypes = {
 const emptyOrderLine = (type = "original") => ({
   type,
   productId: "",
+  productSearch: "",
   quantity: 1,
   unitCost: 0,
   pages: 0,
@@ -4357,7 +4358,20 @@ function PurchaseOrderModal({ products, onSubmit, onClose }) {
     if (field === "type") return { ...emptyOrderLine(value), quantity: line.quantity };
     if (field === "productId") {
       const product = products.find((item) => item.id === value);
-      return { ...line, productId: value, unitCost: line.type === "fotocopia" ? line.unitCost : Number(product?.purchaseCost || 0) };
+      return {
+        ...line,
+        productId: value,
+        productSearch: product?.name || "",
+        unitCost: line.type === "fotocopia" ? line.unitCost : Number(product?.purchaseCost || 0),
+      };
+    }
+    if (field === "productSearch") {
+      return {
+        ...line,
+        productSearch: value,
+        productId: "",
+        unitCost: line.type === "fotocopia" ? line.unitCost : 0,
+      };
     }
     return { ...line, [field]: Number(value) };
   }));
@@ -4369,8 +4383,13 @@ function PurchaseOrderModal({ products, onSubmit, onClose }) {
         const valid = lines.filter((line) => line.productId && line.quantity > 0).map((line) => {
           const product = products.find((item) => item.id === line.productId);
           return {
-            ...line,
+            type: line.type,
+            productId: line.productId,
+            quantity: line.quantity,
             unitCost: orderLineUnitCost(line),
+            pages: line.pages,
+            costPerPage: line.costPerPage,
+            ringCost: line.ringCost,
             productName: product?.name || "",
             unit: product?.unit || "und.",
           };
@@ -4383,35 +4402,68 @@ function PurchaseOrderModal({ products, onSubmit, onClose }) {
         <h2>Nuevo pedido a proveedor</h2>
         <label>Proveedor<input required name="supplier" placeholder="Nombre del proveedor" /></label>
         <div className="purchase-order-lines">
-          {lines.map((line, index) => (
-            <div className="purchase-order-card" key={index}>
-              <div className="order-type-tabs" role="tablist">
-                {Object.entries(orderTypes).map(([type, config]) => (
-                  <button type="button" key={type} className={line.type === type ? "active" : ""} onClick={() => updateLine(index, "type", type)}>{config.label}</button>
-                ))}
-                <button type="button" className="icon-action" aria-label="Quitar línea" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}><Trash2 size={14} /></button>
+          {lines.map((line, index) => {
+            const selectedProduct = products.find((product) => product.id === line.productId);
+            const query = line.productSearch.trim().toLocaleLowerCase();
+            const matches = query && line.productId !== selectedProduct?.id
+              ? optionsFor(line.type).filter((product) =>
+                  `${product.name} ${product.id} ${product.unit || ""}`
+                    .toLocaleLowerCase()
+                    .includes(query),
+                )
+              : [];
+            return (
+              <div className="purchase-order-card" key={index}>
+                <div className="order-type-tabs" role="tablist">
+                  {Object.entries(orderTypes).map(([type, config]) => (
+                    <button type="button" key={type} className={line.type === type ? "active" : ""} onClick={() => updateLine(index, "type", type)}>{config.label}</button>
+                  ))}
+                  <button type="button" className="icon-action" aria-label="Quitar línea" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))}><Trash2 size={14} /></button>
+                </div>
+                <div className="order-product-picker">
+                  <label>
+                    Buscar producto
+                    <input
+                      type="search"
+                      value={line.productSearch}
+                      placeholder="Escribe el nombre o código..."
+                      onChange={(event) => updateLine(index, "productSearch", event.target.value)}
+                    />
+                  </label>
+                  {query && (
+                    <div className="order-product-suggestions">
+                      {matches.length ? matches.map((product) => (
+                        <button
+                          type="button"
+                          key={product.id}
+                          onClick={() => updateLine(index, "productId", product.id)}
+                        >
+                          <strong>{product.name}</strong>
+                          <small>{product.id} · {product.unit || "und."}</small>
+                        </button>
+                      )) : <small className="order-product-empty">No se encontraron coincidencias.</small>}
+                    </div>
+                  )}
+                  {selectedProduct && <small className="order-product-selected">Seleccionado: {selectedProduct.name}</small>}
+                </div>
+                <div className="order-fields">
+                  <label>Cantidad<input type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} /></label>
+                  {line.type === "fotocopia" ? (
+                    <>
+                      <label>Hojas por libro<input type="number" min="0" step="any" value={line.pages} onChange={(event) => updateLine(index, "pages", event.target.value)} /></label>
+                      <label>Costo por hoja<input type="number" min="0" step="any" value={line.costPerPage} onChange={(event) => updateLine(index, "costPerPage", event.target.value)} /></label>
+                      <label>Anillado por libro<input type="number" min="0" step="any" value={line.ringCost} onChange={(event) => updateLine(index, "ringCost", event.target.value)} /></label>
+                    </>
+                  ) : (
+                    <label>Costo por unidad<input type="number" min="0" step="any" value={line.unitCost} onChange={(event) => updateLine(index, "unitCost", event.target.value)} /></label>
+                  )}
+                </div>
+                <small className="order-line-total">
+                  {line.type === "fotocopia" ? `Costo por libro: ${money(orderLineUnitCost(line))} · ` : ""}Subtotal: {money(line.quantity * orderLineUnitCost(line))}
+                </small>
               </div>
-              <select value={line.productId} onChange={(event) => updateLine(index, "productId", event.target.value)}>
-                <option value="">Producto</option>
-                {optionsFor(line.type).map((product) => <option value={product.id} key={product.id}>{product.name} · {product.unit || "und."}</option>)}
-              </select>
-              <div className="order-fields">
-                <label>Cantidad<input type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} /></label>
-                {line.type === "fotocopia" ? (
-                  <>
-                    <label>Hojas por libro<input type="number" min="0" step="any" value={line.pages} onChange={(event) => updateLine(index, "pages", event.target.value)} /></label>
-                    <label>Costo por hoja<input type="number" min="0" step="any" value={line.costPerPage} onChange={(event) => updateLine(index, "costPerPage", event.target.value)} /></label>
-                    <label>Anillado por libro<input type="number" min="0" step="any" value={line.ringCost} onChange={(event) => updateLine(index, "ringCost", event.target.value)} /></label>
-                  </>
-                ) : (
-                  <label>Costo por unidad<input type="number" min="0" step="any" value={line.unitCost} onChange={(event) => updateLine(index, "unitCost", event.target.value)} /></label>
-                )}
-              </div>
-              <small className="order-line-total">
-                {line.type === "fotocopia" ? `Costo por libro: ${money(orderLineUnitCost(line))} · ` : ""}Subtotal: {money(line.quantity * orderLineUnitCost(line))}
-              </small>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <button type="button" className="secondary-button small" onClick={() => setLines((current) => [...current, emptyOrderLine()])}><Plus size={14} /> Añadir producto</button>
         <p className="form-note"><strong>Total del pedido: {money(orderTotal)}</strong></p>
