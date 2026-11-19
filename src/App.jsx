@@ -41,6 +41,7 @@ import {
   loadCloudState,
   syncCloudState,
 } from "./lib/supabase";
+import { downloadCashReport } from "./lib/cash-report";
 import "./App.css";
 
 const navItems = [
@@ -2206,6 +2207,29 @@ function App() {
     });
     return result;
   }, {});
+  const exportCashReport = async (startDate, endDate) => {
+    if (!startDate || !endDate)
+      return showToast("Selecciona las fechas de inicio y fin");
+    if (startDate > endDate)
+      return showToast("La fecha de inicio no puede ser posterior a la fecha final");
+    try {
+      const count = await downloadCashReport({
+        sales,
+        movements: cash.movements,
+        products,
+        startDate,
+        endDate,
+      });
+      showToast(
+        count
+          ? `Informe Excel generado con ${count} movimientos`
+          : "Informe Excel generado; no hubo movimientos en ese período",
+      );
+    } catch (error) {
+      console.error("No se pudo generar el informe Excel de caja", error);
+      showToast(`No se pudo generar el informe Excel: ${error.message}`);
+    }
+  };
   const stats = [
     {
       label: "Ventas del día",
@@ -2648,6 +2672,7 @@ function App() {
               sales={sales}
               onClose={() => setModal("cash")}
               onMovement={() => setModal("movement")}
+              onExport={exportCashReport}
             />
           )}
           {activeNav === "Cuentas por cobrar" && (
@@ -5335,7 +5360,9 @@ function RemindersView({ reminders, onToggle, customReminders, onAddCustom, onTo
     </section>
   );
 }
-function CashView({ cash, sales, onClose, onMovement }) {
+function CashView({ cash, sales, onClose, onMovement, onExport }) {
+  const [reportStart, setReportStart] = useState(localDateString());
+  const [reportEnd, setReportEnd] = useState(localDateString());
   const balance =
     cash.opening +
     cash.movements.reduce(
@@ -5398,6 +5425,41 @@ function CashView({ cash, sales, onClose, onMovement }) {
                   .reduce((sum, item) => sum + item.amount, 0),
               )}
             </strong>
+          </div>
+        </div>
+        <div className="cash-report-export">
+          <PanelHeader
+            title="Informe para contador"
+            detail="Descarga la caja con el formato de la hoja de Google Sheets"
+            action={
+              <button
+                className="primary-button small"
+                type="button"
+                disabled={!reportStart || !reportEnd}
+                onClick={() => onExport(reportStart, reportEnd)}
+              >
+                <Download size={15} />
+                Descargar Excel
+              </button>
+            }
+          />
+          <div className="date-filter-fields">
+            <label>
+              <span>Desde</span>
+              <input
+                type="date"
+                value={reportStart}
+                onChange={(event) => setReportStart(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Hasta</span>
+              <input
+                type="date"
+                value={reportEnd}
+                onChange={(event) => setReportEnd(event.target.value)}
+              />
+            </label>
           </div>
         </div>
       </div>

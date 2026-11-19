@@ -188,7 +188,7 @@ function validateHeaders(sheet) {
   const headers = sheet
     .getRange(5, 1, 1, 12)
     .getDisplayValues()[0]
-    .map((value) => normalizeText(value));
+    .map(normalizeHeader);
   const expected = [
     "fecha",
     "descripcion",
@@ -198,7 +198,7 @@ function validateHeaders(sheet) {
     "poleras",
     "blu/cam",
     "tela",
-  ];
+  ].map(normalizeHeader);
   expected.forEach((value, index) => {
     if (headers[index] !== value)
       throw new Error(`Encabezado inesperado en la columna ${index + 1}. No se modifico la hoja.`);
@@ -208,6 +208,10 @@ function validateHeaders(sheet) {
       headers[10] !== "otros" ||
       headers[11] !== "total")
     throw new Error("Las columnas de categorias no coinciden. No se modifico la hoja.");
+}
+
+function normalizeHeader(value) {
+  return normalizeText(value).replace(/[°º]/g, "º").replace(/\s/g, "");
 }
 
 function getSaleCategories(items) {
