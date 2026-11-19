@@ -113,13 +113,20 @@ export function buildCashReportRows({
       if (inRange(date)) getDay(date).sales.push(sale);
     });
 
+  const saleIds = new Set(sales.map((sale) => String(sale.id)));
   movements
-    .filter(
-      (movement) =>
+    .filter((movement) => {
+      if (movement.status === "Anulada") return false;
+      const concept = String(movement.concept || "");
+      if (movement.type === "Ingreso")
+        return (
+          !saleIds.has(String(movement.id)) && !concept.startsWith("Venta ")
+        );
+      return (
         movement.type === "Egreso" &&
-        movement.status !== "Anulada" &&
-        !String(movement.concept || "").startsWith("Anulación "),
-    )
+        !concept.startsWith("Anulación ")
+      );
+    })
     .forEach((movement) => {
       const date = reportDate(movement.date || movement.moved_at);
       if (inRange(date)) getDay(date).movements.push(movement);
@@ -156,7 +163,7 @@ export function buildCashReportRows({
           qrRows.push(
             makeRow(
               date,
-              `QR ${String(sale.payer || sale.customer || "Cliente").trim()}`,
+              `QR-${String(sale.payer || sale.customer || "Cliente").trim()}`,
               sale.id || "",
               qrCategories,
             ),
@@ -187,11 +194,16 @@ export function buildCashReportRows({
         );
         if (!amount) return;
         const categories = Array(reportCategories.length).fill(0);
-        categories[7] = -roundMoney(amount);
+        const isIncome = movement.type === "Ingreso";
+        categories[isIncome ? 6 : 7] = roundMoney(amount) * (isIncome ? 1 : -1);
         rows.push(
           makeRow(
             date,
-            String(movement.concept || movement.reason || "EGRESO").trim(),
+            String(
+              movement.concept ||
+                movement.reason ||
+                (isIncome ? "INGRESO" : "EGRESO"),
+            ).trim(),
             movement.id || "",
             categories,
           ),
@@ -204,18 +216,18 @@ export function buildCashReportRows({
 export async function downloadCashReport(options) {
   const rows = buildCashReportRows(options);
   const headers = [
-    "Fecha",
-    "Descripción",
-    "Nº Recibo",
-    "Libros",
-    "Agendas",
-    "Poleras",
-    "Blu/Cam",
-    "Tela",
-    "Deportivos",
-    "Varios",
-    "Otros",
-    "Total",
+    "FECHA",
+    "DESCRIPCIÓN",
+    "N°RECIBO",
+    "LIBROS",
+    "AGENDAS",
+    "POLERAS",
+    "BLU/CAM",
+    "TELA",
+    "DEXTIVO",
+    "VARIOS",
+    "OTROS",
+    "TOTAL",
   ];
   const { strToU8, zipSync } = await import("fflate");
   const escapeXml = (value) =>
@@ -242,6 +254,8 @@ export async function downloadCashReport(options) {
     `<c r="${reference}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
   const numberCell = (reference, value, style) =>
     `<c r="${reference}" s="${style}"><v>${Number(value)}</v></c>`;
+  const formulaCell = (reference, formula, value, style) =>
+    `<c r="${reference}" s="${style}"><f>${escapeXml(formula)}</f><v>${Number(value)}</v></c>`;
   const dateSerial = (value) => {
     const [year, month, day] = value.split("-").map(Number);
     return (Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / 86400000;
@@ -259,12 +273,14 @@ export async function downloadCashReport(options) {
         numberCell(`A${rowNumber}`, dateSerial(reportRow[0]), zebra ? 7 : 4),
         stringCell(`B${rowNumber}`, reportRow[1], zebra ? 8 : 5),
         stringCell(`C${rowNumber}`, reportRow[2], zebra ? 8 : 5),
-        ...reportRow.slice(3).map((amount, amountIndex) =>
-          numberCell(
-            `${columnName(amountIndex + 4)}${rowNumber}`,
-            amount,
-            zebra ? 9 : 6,
-          ),
+        ...reportRow.slice(3, 11).map((amount, amountIndex) =>
+          numberCell(`${columnName(amountIndex + 4)}${rowNumber}`, amount, zebra ? 9 : 6),
+        ),
+        formulaCell(
+          `L${rowNumber}`,
+          `SUM(D${rowNumber}:K${rowNumber})`,
+          reportRow[11],
+          zebra ? 9 : 6,
         ),
       ];
       return `<row r="${rowNumber}">${cells.join("")}</row>`;
@@ -280,8 +296,9 @@ export async function downloadCashReport(options) {
             11,
           ),
         )
-        .join("")}${numberCell(
+        .join(""        )}${formulaCell(
         `L${totalRowNumber}`,
+        `SUM(D${totalRowNumber}:K${totalRowNumber})`,
         roundMoney(rows.reduce((sum, row) => sum + row[11], 0)),
         11,
       )}</row>`

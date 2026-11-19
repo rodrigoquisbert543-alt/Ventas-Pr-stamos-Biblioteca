@@ -2222,7 +2222,7 @@ function App() {
       });
       showToast(
         count
-          ? `Informe Excel generado con ${count} movimientos`
+          ? `Informe Excel generado con ${count} filas`
           : "Informe Excel generado; no hubo movimientos en ese período",
       );
     } catch (error) {
